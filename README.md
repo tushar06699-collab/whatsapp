@@ -72,7 +72,20 @@ For local Meta testing, expose your local server with a public HTTPS tunnel such
 
 ## Bot Behavior
 
-When a WhatsApp user sends `hy`, `hi`, `hello`, or any normal message, the bot replies in this sequence:
+When a WhatsApp user sends `hy`, `hi`, `hello`, or any first message, the bot first asks for language:
+
+```text
+Please choose your preferred language.
+
+कृपया अपनी भाषा चुनें।
+
+English
+Hindi
+```
+
+After the user selects a language, all menus and replies continue in that language.
+
+For English, the bot replies in this sequence:
 
 1. School image with this intro as the caption:
 
@@ -94,6 +107,16 @@ Fee Structure
 Transport Facility
 Contact School
 Other Services
+```
+
+For Hindi, the same flow is shown in simple Hindi:
+
+```text
+प्रवेश जानकारी
+फीस जानकारी
+परिवहन सुविधा
+स्कूल संपर्क
+अन्य सेवाएं
 ```
 
 Menu responses:

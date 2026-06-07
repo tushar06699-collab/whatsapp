@@ -27,102 +27,219 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# In-memory language preference. For Render's normal single web instance this is enough.
+# For multiple workers/instances, move this to a small database or Redis.
+LANGUAGE_BY_USER = {}
 
-SCHOOL_INTRO = (
-    "\U0001f3eb Welcome to P.S. Public School\n\n"
-    "P.S. Public School is committed to quality education, discipline, "
-    "student safety, and all-round development. Our team focuses on building "
-    "strong academic foundations along with confidence, values, and life skills."
-)
+LANGUAGE_LABELS = {
+    "en": "English",
+    "hi": "Hindi",
+}
+
+SCHOOL_INTRO = {
+    "en": (
+        "Welcome to P.S. Public School\n\n"
+        "P.S. Public School is committed to quality education, discipline, "
+        "student safety, and all-round development. Our team focuses on building "
+        "strong academic foundations along with confidence, values, and life skills."
+    ),
+    "hi": (
+        "पी.एस. पब्लिक स्कूल में आपका स्वागत है\n\n"
+        "पी.एस. पब्लिक स्कूल गुणवत्तापूर्ण शिक्षा, अनुशासन, बच्चों की सुरक्षा "
+        "और सर्वांगीण विकास के लिए प्रतिबद्ध है। हमारा उद्देश्य विद्यार्थियों "
+        "को मजबूत शिक्षा, अच्छे संस्कार, आत्मविश्वास और जीवन कौशल देना है।"
+    ),
+}
 
 SERVICES = {
     "admission_enquiry": {
-        "title": "Admission Enquiry",
-        "description": "Admission process and details",
-        "reply": "Admission Enquiry",
+        "title": {"en": "Admission Enquiry", "hi": "प्रवेश जानकारी"},
+        "description": {
+            "en": "Admission process and details",
+            "hi": "प्रवेश प्रक्रिया और जानकारी",
+        },
+        "reply": {
+            "en": "Admission Enquiry",
+            "hi": "प्रवेश जानकारी",
+        },
     },
     "fee_structure": {
-        "title": "Fee Structure",
-        "description": "Latest school fee information",
-        "reply": "Fee Structure\n\nPlease contact the school office for the latest fee structure.",
+        "title": {"en": "Fee Structure", "hi": "फीस जानकारी"},
+        "description": {
+            "en": "Latest school fee information",
+            "hi": "वर्तमान फीस की जानकारी",
+        },
+        "reply": {
+            "en": "Fee Structure\n\nPlease contact the school office for the latest fee structure.",
+            "hi": "फीस जानकारी\n\nवर्तमान फीस संरचना के लिए कृपया स्कूल कार्यालय से संपर्क करें।",
+        },
     },
     "transport_facility": {
-        "title": "Transport Facility",
-        "description": "Bus routes and availability",
-        "reply": "Transport Facility\n\nTransport facility is available on selected routes.",
+        "title": {"en": "Transport Facility", "hi": "परिवहन सुविधा"},
+        "description": {
+            "en": "Bus routes and availability",
+            "hi": "बस रूट और उपलब्धता",
+        },
+        "reply": {
+            "en": "Transport Facility\n\nTransport facility is available on selected routes.",
+            "hi": "परिवहन सुविधा\n\nचयनित रूटों पर स्कूल परिवहन सुविधा उपलब्ध है।",
+        },
     },
     "contact_school": {
-        "title": "Contact School",
-        "description": "Phone number and office contact",
-        "reply": "Contact School\n\nContact: +91XXXXXXXXXX",
+        "title": {"en": "Contact School", "hi": "स्कूल संपर्क"},
+        "description": {
+            "en": "Phone number and office contact",
+            "hi": "फोन और कार्यालय संपर्क",
+        },
+        "reply": {
+            "en": (
+                "Contact School\n\n"
+                "Call: +91 94162 93661\n"
+                "WhatsApp: +91 94168 38604\n"
+                "Email: psbhurri@gmail.com\n"
+                "Website: pspublicschool.com"
+            ),
+            "hi": (
+                "स्कूल संपर्क\n\n"
+                "फोन: +91 94162 93661\n"
+                "WhatsApp: +91 94168 38604\n"
+                "ईमेल: psbhurri@gmail.com\n"
+                "वेबसाइट: pspublicschool.com"
+            ),
+        },
     },
     "other_services": {
-        "title": "Other Services",
-        "description": "Books, uniform, certificates, timing",
-        "reply": (
-            "Other Services\n\n"
-            "For books, uniforms, certificates, school timings, or general support, "
-            "please contact the school office."
+        "title": {"en": "Other Services", "hi": "अन्य सेवाएं"},
+        "description": {
+            "en": "Books, uniform, certificates, timing",
+            "hi": "किताबें, यूनिफॉर्म, प्रमाण पत्र",
+        },
+        "reply": {
+            "en": (
+                "Other Services\n\n"
+                "For books, uniforms, certificates, school timings, or general support, "
+                "please contact the school office."
+            ),
+            "hi": (
+                "अन्य सेवाएं\n\n"
+                "किताबें, यूनिफॉर्म, प्रमाण पत्र, स्कूल समय या सामान्य सहायता के लिए "
+                "कृपया स्कूल कार्यालय से संपर्क करें।"
+            ),
+        },
+    },
+}
+
+ACTION_REPLIES = {
+    "fill_admission_form": {
+        "en": (
+            "Online Admission Form\n\n"
+            f"Please fill the admission form here:\n{ONLINE_ADMISSION_FORM_URL}\n\n"
+            "After submitting, keep the required documents ready for verification at the school office."
+        ),
+        "hi": (
+            "ऑनलाइन प्रवेश फॉर्म\n\n"
+            f"कृपया प्रवेश फॉर्म यहां भरें:\n{ONLINE_ADMISSION_FORM_URL}\n\n"
+            "फॉर्म जमा करने के बाद सत्यापन के लिए जरूरी दस्तावेज स्कूल कार्यालय में लेकर आएं।"
+        ),
+    },
+    "admission_contact": {
+        "en": (
+            "Admission Help Desk\n\n"
+            "Call: +91 94162 93661\n"
+            "WhatsApp: +91 94168 38604\n"
+            "Email: psbhurri@gmail.com\n"
+            "Website: pspublicschool.com"
+        ),
+        "hi": (
+            "प्रवेश सहायता\n\n"
+            "फोन: +91 94162 93661\n"
+            "WhatsApp: +91 94168 38604\n"
+            "ईमेल: psbhurri@gmail.com\n"
+            "वेबसाइट: pspublicschool.com"
         ),
     },
 }
 
-SERVICE_TITLE_TO_ID = {
-    service["title"].lower(): service_id for service_id, service in SERVICES.items()
-}
-
-ACTION_REPLIES = {
-    "fill_admission_form": (
-        "Online Admission Form\n\n"
-        f"Please fill the admission form here:\n{ONLINE_ADMISSION_FORM_URL}\n\n"
-        "After submitting, keep the required documents ready for verification at the school office."
-    ),
-    "admission_contact": (
-        "Admission Help Desk\n\n"
+SCHOOL_HIGHLIGHTS_MESSAGE = {
+    "en": (
+        "Admission Enquiry - P.S. Public School\n\n"
+        "Why choose our school?\n"
+        "- Quality education with strong academic focus.\n"
+        "- Safe, disciplined, and student-friendly environment.\n"
+        "- Holistic development through activities, values, and confidence building.\n"
+        "- Experienced staff and personal attention for students.\n"
+        "- Transport facility available on selected routes.\n"
+        "- Regular communication with parents for student progress.\n\n"
+        "Contact Details\n"
         "Call: +91 94162 93661\n"
         "WhatsApp: +91 94168 38604\n"
         "Email: psbhurri@gmail.com\n"
         "Website: pspublicschool.com"
     ),
+    "hi": (
+        "प्रवेश जानकारी - पी.एस. पब्लिक स्कूल\n\n"
+        "हमारे स्कूल की विशेषताएं:\n"
+        "- मजबूत शैक्षणिक आधार के साथ गुणवत्तापूर्ण शिक्षा।\n"
+        "- सुरक्षित, अनुशासित और बच्चों के अनुकूल वातावरण।\n"
+        "- गतिविधियों, संस्कारों और आत्मविश्वास के साथ सर्वांगीण विकास।\n"
+        "- अनुभवी शिक्षक और विद्यार्थियों पर व्यक्तिगत ध्यान।\n"
+        "- चयनित रूटों पर परिवहन सुविधा।\n"
+        "- विद्यार्थियों की प्रगति के लिए अभिभावकों से नियमित संपर्क।\n\n"
+        "संपर्क जानकारी\n"
+        "फोन: +91 94162 93661\n"
+        "WhatsApp: +91 94168 38604\n"
+        "ईमेल: psbhurri@gmail.com\n"
+        "वेबसाइट: pspublicschool.com"
+    ),
 }
 
-SCHOOL_HIGHLIGHTS_MESSAGE = (
-    "Admission Enquiry - P.S. Public School\n\n"
-    "Why choose our school?\n"
-    "- Quality education with strong academic focus.\n"
-    "- Safe, disciplined, and student-friendly environment.\n"
-    "- Holistic development through activities, values, and confidence building.\n"
-    "- Experienced staff and personal attention for students.\n"
-    "- Transport facility available on selected routes.\n"
-    "- Regular communication with parents for student progress.\n\n"
-    "Contact Details\n"
-    "Call: +91 94162 93661\n"
-    "WhatsApp: +91 94168 38604\n"
-    "Email: psbhurri@gmail.com\n"
-    "Website: pspublicschool.com"
-)
-
-ADMISSION_REQUIREMENTS_MESSAGE = (
-    "What to bring for admission\n\n"
-    "Please keep these documents ready:\n"
-    "- Filled admission form.\n"
-    "- Student birth certificate.\n"
-    "- Student Aadhaar card, if available.\n"
-    "- Parent/guardian Aadhaar or ID proof.\n"
-    "- Address proof.\n"
-    "- Previous class report card, if applicable.\n"
-    "- Transfer certificate, if applicable.\n"
-    "- Recent passport-size photographs of the student.\n\n"
-    "Admission Process\n"
-    "1. Fill the admission form online or offline.\n"
-    "2. Submit required documents for verification.\n"
-    "3. Visit the school office for confirmation and fee guidance.\n"
-    "4. Complete admission formalities and collect joining details."
-)
+ADMISSION_REQUIREMENTS_MESSAGE = {
+    "en": (
+        "What to bring for admission\n\n"
+        "Please keep these documents ready:\n"
+        "- Filled admission form.\n"
+        "- Student birth certificate.\n"
+        "- Student Aadhaar card, if available.\n"
+        "- Parent/guardian Aadhaar or ID proof.\n"
+        "- Address proof.\n"
+        "- Previous class report card, if applicable.\n"
+        "- Transfer certificate, if applicable.\n"
+        "- Recent passport-size photographs of the student.\n\n"
+        "Admission Process\n"
+        "1. Fill the admission form online or offline.\n"
+        "2. Submit required documents for verification.\n"
+        "3. Visit the school office for confirmation and fee guidance.\n"
+        "4. Complete admission formalities and collect joining details."
+    ),
+    "hi": (
+        "प्रवेश के लिए क्या लेकर आएं\n\n"
+        "कृपया ये दस्तावेज तैयार रखें:\n"
+        "- भरा हुआ प्रवेश फॉर्म।\n"
+        "- विद्यार्थी का जन्म प्रमाण पत्र।\n"
+        "- विद्यार्थी का आधार कार्ड, यदि उपलब्ध हो।\n"
+        "- माता-पिता/अभिभावक का आधार या पहचान पत्र।\n"
+        "- पते का प्रमाण।\n"
+        "- पिछली कक्षा की मार्कशीट, यदि लागू हो।\n"
+        "- ट्रांसफर सर्टिफिकेट, यदि लागू हो।\n"
+        "- विद्यार्थी की हाल की पासपोर्ट साइज फोटो।\n\n"
+        "प्रवेश प्रक्रिया\n"
+        "1. प्रवेश फॉर्म ऑनलाइन या ऑफलाइन भरें।\n"
+        "2. जरूरी दस्तावेज सत्यापन के लिए जमा करें।\n"
+        "3. पुष्टि और फीस जानकारी के लिए स्कूल कार्यालय आएं।\n"
+        "4. प्रवेश प्रक्रिया पूरी करें और जॉइनिंग जानकारी प्राप्त करें।"
+    ),
+}
 
 
 def normalize_message(message_text):
     return (message_text or "").strip().lower()
+
+
+def service_title_to_id(language):
+    return {
+        service["title"][language].lower(): service_id
+        for service_id, service in SERVICES.items()
+    }
 
 
 def send_whatsapp_payload(payload):
@@ -184,7 +301,7 @@ def send_document_message(to_phone_number, document_url, filename, caption):
     return send_whatsapp_payload(payload)
 
 
-def send_admission_action_buttons(to_phone_number):
+def send_language_buttons(to_phone_number):
     payload = {
         "messaging_product": "whatsapp",
         "recipient_type": "individual",
@@ -193,7 +310,41 @@ def send_admission_action_buttons(to_phone_number):
         "interactive": {
             "type": "button",
             "body": {
-                "text": "Choose how you would like to continue with admission."
+                "text": (
+                    "Please choose your preferred language.\n\n"
+                    "कृपया अपनी भाषा चुनें।"
+                )
+            },
+            "action": {
+                "buttons": [
+                    {
+                        "type": "reply",
+                        "reply": {"id": "language_en", "title": "English"},
+                    },
+                    {
+                        "type": "reply",
+                        "reply": {"id": "language_hi", "title": "Hindi"},
+                    },
+                ]
+            },
+        },
+    }
+    return send_whatsapp_payload(payload)
+
+
+def send_admission_action_buttons(to_phone_number, language):
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to_phone_number,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {
+                "text": {
+                    "en": "Choose how you would like to continue with admission.",
+                    "hi": "कृपया बताएं आप प्रवेश प्रक्रिया कैसे आगे बढ़ाना चाहते हैं।",
+                }[language]
             },
             "action": {
                 "buttons": [
@@ -201,14 +352,14 @@ def send_admission_action_buttons(to_phone_number):
                         "type": "reply",
                         "reply": {
                             "id": "fill_admission_form",
-                            "title": "Fill Form",
+                            "title": {"en": "Fill Form", "hi": "फॉर्म भरें"}[language],
                         },
                     },
                     {
                         "type": "reply",
                         "reply": {
                             "id": "admission_contact",
-                            "title": "Contact Office",
+                            "title": {"en": "Contact Office", "hi": "संपर्क करें"}[language],
                         },
                     },
                 ]
@@ -225,12 +376,12 @@ def run_later(delay_seconds, callback, *args):
     return timer
 
 
-def send_service_list_message(to_phone_number):
+def send_service_list_message(to_phone_number, language):
     rows = [
         {
             "id": service_id,
-            "title": service["title"],
-            "description": service["description"],
+            "title": service["title"][language],
+            "description": service["description"][language],
         }
         for service_id, service in SERVICES.items()
     ]
@@ -241,16 +392,27 @@ def send_service_list_message(to_phone_number):
         "type": "interactive",
         "interactive": {
             "type": "list",
-            "header": {"type": "text", "text": "P.S. Public School"},
-            "body": {
-                "text": "Please tap below and select the service you need."
+            "header": {
+                "type": "text",
+                "text": {"en": "P.S. Public School", "hi": "पी.एस. पब्लिक स्कूल"}[language],
             },
-            "footer": {"text": "We will guide you with the selected service."},
+            "body": {
+                "text": {
+                    "en": "Please tap below and select the service you need.",
+                    "hi": "कृपया नीचे टैप करके अपनी जरूरत की सेवा चुनें।",
+                }[language]
+            },
+            "footer": {
+                "text": {
+                    "en": "We will guide you with the selected service.",
+                    "hi": "चुनी हुई सेवा के अनुसार आपको जानकारी दी जाएगी।",
+                }[language]
+            },
             "action": {
-                "button": "View Services",
+                "button": {"en": "View Services", "hi": "सेवाएं देखें"}[language],
                 "sections": [
                     {
-                        "title": "School Services",
+                        "title": {"en": "School Services", "hi": "स्कूल सेवाएं"}[language],
                         "rows": rows,
                     }
                 ],
@@ -279,55 +441,87 @@ def get_admission_form_pdf_url():
     )
 
 
-def send_school_intro(to_phone_number):
+def send_school_intro(to_phone_number, language):
     image_url = get_school_image_url()
     if image_url:
-        return send_image_message(to_phone_number, image_url, SCHOOL_INTRO)
+        return send_image_message(to_phone_number, image_url, SCHOOL_INTRO[language])
 
     logger.warning("SCHOOL_IMAGE_URL is not set. Sending school intro as text.")
-    return send_text_message(to_phone_number, SCHOOL_INTRO)
+    return send_text_message(to_phone_number, SCHOOL_INTRO[language])
 
 
-def send_admission_enquiry_flow(to_phone_number):
-    send_text_message(to_phone_number, SCHOOL_HIGHLIGHTS_MESSAGE)
+def send_intro_and_services(to_phone_number, language):
+    send_school_intro(to_phone_number, language)
+    if SERVICE_MENU_DELAY_SECONDS > 0:
+        run_later(
+            SERVICE_MENU_DELAY_SECONDS,
+            send_service_list_message,
+            to_phone_number,
+            language,
+        )
+        return
+
+    send_service_list_message(to_phone_number, language)
+
+
+def send_admission_enquiry_flow(to_phone_number, language):
+    send_text_message(to_phone_number, SCHOOL_HIGHLIGHTS_MESSAGE[language])
     run_later(
         1.5,
         send_document_message,
         to_phone_number,
         get_admission_form_pdf_url(),
         "P.S. Public School Admission Form.pdf",
-        "Admission Form - P.S. Public School",
+        {
+            "en": "Admission Form - P.S. Public School",
+            "hi": "प्रवेश फॉर्म - पी.एस. पब्लिक स्कूल",
+        }[language],
     )
-    run_later(3, send_text_message, to_phone_number, ADMISSION_REQUIREMENTS_MESSAGE)
-    run_later(4.5, send_admission_action_buttons, to_phone_number)
+    run_later(3, send_text_message, to_phone_number, ADMISSION_REQUIREMENTS_MESSAGE[language])
+    run_later(4.5, send_admission_action_buttons, to_phone_number, language)
+
+
+def set_language_and_start(to_phone_number, language):
+    LANGUAGE_BY_USER[to_phone_number] = language
+    confirmation = {
+        "en": "Language selected: English",
+        "hi": "भाषा चुनी गई: हिन्दी",
+    }[language]
+    send_text_message(to_phone_number, confirmation)
+    send_intro_and_services(to_phone_number, language)
 
 
 def reply_to_user(to_phone_number, message_text):
     normalized_text = normalize_message(message_text)
-    service_id = SERVICE_TITLE_TO_ID.get(normalized_text, normalized_text)
+
+    if normalized_text in {"language_en", "english"}:
+        set_language_and_start(to_phone_number, "en")
+        return
+
+    if normalized_text in {"language_hi", "hindi", "हिंदी", "हिन्दी"}:
+        set_language_and_start(to_phone_number, "hi")
+        return
+
+    language = LANGUAGE_BY_USER.get(to_phone_number)
+    if not language:
+        send_language_buttons(to_phone_number)
+        return
+
+    service_id = service_title_to_id(language).get(normalized_text, normalized_text)
 
     if service_id in ACTION_REPLIES:
-        send_text_message(to_phone_number, ACTION_REPLIES[service_id])
+        send_text_message(to_phone_number, ACTION_REPLIES[service_id][language])
         return
 
     if service_id == "admission_enquiry":
-        send_admission_enquiry_flow(to_phone_number)
+        send_admission_enquiry_flow(to_phone_number, language)
         return
 
     if service_id in SERVICES:
-        send_text_message(to_phone_number, SERVICES[service_id]["reply"])
+        send_text_message(to_phone_number, SERVICES[service_id]["reply"][language])
         return
 
-    send_school_intro(to_phone_number)
-    if SERVICE_MENU_DELAY_SECONDS > 0:
-        run_later(
-            SERVICE_MENU_DELAY_SECONDS,
-            send_service_list_message,
-            to_phone_number,
-        )
-        return
-
-    send_service_list_message(to_phone_number)
+    send_intro_and_services(to_phone_number, language)
 
 
 @app.get("/")
