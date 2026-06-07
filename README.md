@@ -1,0 +1,130 @@
+# WhatsApp Auto Reply Bot
+
+Python Flask bot for the Meta WhatsApp Cloud API. The bot never sends messages first. It only replies to WhatsApp messages received through the `/webhook` endpoint.
+
+## Files
+
+- `app.py` - Flask app with Meta webhook verification and incoming message handling.
+- `requirements.txt` - Python dependencies.
+- `render.yaml` - Render deployment configuration.
+- `.env.example` - Required environment variable example.
+
+## Local Setup
+
+1. Create a virtual environment:
+
+   ```bash
+   python -m venv .venv
+   ```
+
+2. Activate the virtual environment:
+
+   Windows PowerShell:
+
+   ```powershell
+   .\.venv\Scripts\Activate.ps1
+   ```
+
+   macOS/Linux:
+
+   ```bash
+   source .venv/bin/activate
+   ```
+
+3. Install dependencies:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. Create a `.env` file from `.env.example`:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+5. Add your Meta WhatsApp Cloud API values:
+
+   ```env
+   ACCESS_TOKEN=your_meta_whatsapp_cloud_api_access_token
+   PHONE_NUMBER_ID=your_whatsapp_phone_number_id
+   GRAPH_API_VERSION=v20.0
+   ```
+
+6. Run locally:
+
+   ```bash
+   python app.py
+   ```
+
+Local webhook URL:
+
+```text
+http://localhost:5000/webhook
+```
+
+For local Meta testing, expose your local server with a public HTTPS tunnel such as ngrok.
+
+## Bot Behavior
+
+When a WhatsApp user sends any message, the bot replies:
+
+```text
+🏫 Welcome to P.S. Public School
+
+Please choose an option:
+
+1️⃣ Admission Enquiry
+2️⃣ Fee Structure
+3️⃣ Transport Facility
+4️⃣ Contact School
+```
+
+Menu responses:
+
+- `1` - `Admissions are open. Please call the school office for details.`
+- `2` - `Please contact the school office for the latest fee structure.`
+- `3` - `Transport facility is available on selected routes.`
+- `4` - `Contact: +91XXXXXXXXXX`
+
+## Deploy on Render
+
+1. Push this project to a GitHub repository.
+2. Open Render and create a new Blueprint or Web Service from the repository.
+3. If using `render.yaml`, Render will use:
+
+   ```text
+   Build Command: pip install -r requirements.txt
+   Start Command: gunicorn app:app
+   ```
+
+4. Add environment variables in Render:
+
+   ```text
+   ACCESS_TOKEN=your_meta_whatsapp_cloud_api_access_token
+   PHONE_NUMBER_ID=your_whatsapp_phone_number_id
+   GRAPH_API_VERSION=v20.0
+   ```
+
+5. After deployment, your webhook URL will be:
+
+   ```text
+   https://YOUR-APP.onrender.com/webhook
+   ```
+
+## Connect Webhook in Meta
+
+In Meta for Developers, go to your WhatsApp app webhook settings and set:
+
+```text
+Callback URL = https://YOUR-APP.onrender.com/webhook
+Verify Token = school_bot_verify
+```
+
+Subscribe to the WhatsApp `messages` webhook field.
+
+## Important
+
+- This app only sends replies from the incoming `POST /webhook` handler.
+- It does not contain any route, scheduler, startup task, or background job that sends outbound messages first.
+- Keep `ACCESS_TOKEN` private and never commit your real `.env` file.
