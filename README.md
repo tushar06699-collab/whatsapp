@@ -126,7 +126,7 @@ Users can select `Change Language` / `भाषा बदलें` anytime if t
 Menu responses:
 
 - `Admission Enquiry` - Professional admission flow with school highlights, contact details, admission form PDF, required documents, and fill-form option.
-- `Fee Structure` - School academic overview, then class-wise fee structure for session 2025-2026.
+- `Fee Structure` - School academic overview, then class-wise fee structure for session 2026-2027.
 - `Transport Facility` - Transport facility response.
 - `Contact School` - School contact response.
 - `Other Services` - Other services response.
