@@ -16,3 +16,7 @@ services:
         sync: false
       - key: SERVICE_MENU_DELAY_SECONDS
         value: "3"
+      - key: ADMISSION_FORM_PDF_URL
+        sync: false
+      - key: ONLINE_ADMISSION_FORM_URL
+        value: https://pspublicschool.com

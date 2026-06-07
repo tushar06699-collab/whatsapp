@@ -51,6 +51,9 @@ Python Flask bot for the Meta WhatsApp Cloud API. The bot never sends messages f
    PHONE_NUMBER_ID=your_whatsapp_phone_number_id
    GRAPH_API_VERSION=v20.0
    SCHOOL_IMAGE_URL=https://YOUR-APP.onrender.com/static/school.png
+   SERVICE_MENU_DELAY_SECONDS=3
+   ADMISSION_FORM_PDF_URL=https://YOUR-APP.onrender.com/static/admission-form-final.pdf
+   ONLINE_ADMISSION_FORM_URL=https://pspublicschool.com
    ```
 
 6. Run locally:
@@ -95,13 +98,40 @@ Other Services
 
 Menu responses:
 
-- `Admission Enquiry` - Admission enquiry response.
+- `Admission Enquiry` - Professional admission flow with school highlights, contact details, admission form PDF, required documents, and fill-form option.
 - `Fee Structure` - Fee structure response.
 - `Transport Facility` - Transport facility response.
 - `Contact School` - School contact response.
 - `Other Services` - Other services response.
 
 To use a different school photo, replace `static/school.png` or set `SCHOOL_IMAGE_URL` to any public HTTPS image URL.
+
+## Admission Enquiry Flow
+
+When a user selects `Admission Enquiry`, the bot sends:
+
+1. School highlights and contact details:
+
+   ```text
+   Call: +91 94162 93661
+   WhatsApp: +91 94168 38604
+   Email: psbhurri@gmail.com
+   Website: pspublicschool.com
+   ```
+
+2. Admission form PDF:
+
+   ```text
+   https://YOUR-APP.onrender.com/static/admission-form-final.pdf
+   ```
+
+3. Required documents and admission process.
+4. Buttons:
+
+   ```text
+   Fill Form
+   Contact Office
+   ```
 
 ## Deploy on Render
 
@@ -121,6 +151,9 @@ To use a different school photo, replace `static/school.png` or set `SCHOOL_IMAG
    PHONE_NUMBER_ID=your_whatsapp_phone_number_id
    GRAPH_API_VERSION=v20.0
    SCHOOL_IMAGE_URL=https://YOUR-APP.onrender.com/static/school.png
+   SERVICE_MENU_DELAY_SECONDS=3
+   ADMISSION_FORM_PDF_URL=https://YOUR-APP.onrender.com/static/admission-form-final.pdf
+   ONLINE_ADMISSION_FORM_URL=https://pspublicschool.com
    ```
 
 5. After deployment, your webhook URL will be:
