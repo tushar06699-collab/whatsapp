@@ -1,6 +1,6 @@
 import logging
 import os
-import time
+import threading
 
 import requests
 from dotenv import load_dotenv
@@ -174,9 +174,16 @@ def reply_to_user(to_phone_number, message_text):
         send_text_message(to_phone_number, SERVICES[service_id]["reply"])
         return
 
-    intro_sent = send_school_intro(to_phone_number)
-    if intro_sent and SERVICE_MENU_DELAY_SECONDS > 0:
-        time.sleep(SERVICE_MENU_DELAY_SECONDS)
+    send_school_intro(to_phone_number)
+    if SERVICE_MENU_DELAY_SECONDS > 0:
+        timer = threading.Timer(
+            SERVICE_MENU_DELAY_SECONDS,
+            send_service_list_message,
+            args=[to_phone_number],
+        )
+        timer.daemon = True
+        timer.start()
+        return
 
     send_service_list_message(to_phone_number)
 

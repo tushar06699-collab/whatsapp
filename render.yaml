@@ -14,3 +14,5 @@ services:
         value: v20.0
       - key: SCHOOL_IMAGE_URL
         sync: false
+      - key: SERVICE_MENU_DELAY_SECONDS
+        value: "3"
