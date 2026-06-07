@@ -107,6 +107,7 @@ Fee Structure
 Transport Facility
 Contact School
 Other Services
+Change Language
 ```
 
 For Hindi, the same flow is shown in simple Hindi:
@@ -117,12 +118,15 @@ For Hindi, the same flow is shown in simple Hindi:
 परिवहन सुविधा
 स्कूल संपर्क
 अन्य सेवाएं
+भाषा बदलें
 ```
+
+Users can select `Change Language` / `भाषा बदलें` anytime if they selected the wrong language or want to switch between English and Hindi.
 
 Menu responses:
 
 - `Admission Enquiry` - Professional admission flow with school highlights, contact details, admission form PDF, required documents, and fill-form option.
-- `Fee Structure` - Fee structure response.
+- `Fee Structure` - School academic overview, then class-wise fee structure for session 2025-2026.
 - `Transport Facility` - Transport facility response.
 - `Contact School` - School contact response.
 - `Other Services` - Other services response.
@@ -154,6 +158,30 @@ When a user selects `Admission Enquiry`, the bot sends:
    ```text
    Fill Form
    Contact Office
+   ```
+
+## Fee Structure Flow
+
+When a user selects `Fee Structure`, the bot sends:
+
+1. Basic academic details about the school.
+2. Class-wise fee structure with:
+
+   ```text
+   Class
+   Fresh Admission Fee
+   Old Admission Fee
+   Annual Charge
+   Tuition Fee
+   Registration Fee
+   I-Card Fee
+   ```
+
+3. Additional charges:
+
+   ```text
+   Exam Fee: Rs. 350
+   Late Fee Charge: Rs. 50
    ```
 
 ## Deploy on Render

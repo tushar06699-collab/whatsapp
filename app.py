@@ -70,8 +70,8 @@ SERVICES = {
             "hi": "वर्तमान फीस की जानकारी",
         },
         "reply": {
-            "en": "Fee Structure\n\nPlease contact the school office for the latest fee structure.",
-            "hi": "फीस जानकारी\n\nवर्तमान फीस संरचना के लिए कृपया स्कूल कार्यालय से संपर्क करें।",
+            "en": "Fee Structure",
+            "hi": "फीस जानकारी",
         },
     },
     "transport_facility": {
@@ -125,6 +125,17 @@ SERVICES = {
                 "किताबें, यूनिफॉर्म, प्रमाण पत्र, स्कूल समय या सामान्य सहायता के लिए "
                 "कृपया स्कूल कार्यालय से संपर्क करें।"
             ),
+        },
+    },
+    "change_language": {
+        "title": {"en": "Change Language", "hi": "भाषा बदलें"},
+        "description": {
+            "en": "Switch between English and Hindi",
+            "hi": "English या Hindi चुनें",
+        },
+        "reply": {
+            "en": "Change Language",
+            "hi": "भाषा बदलें",
         },
     },
 }
@@ -227,6 +238,101 @@ ADMISSION_REQUIREMENTS_MESSAGE = {
         "2. जरूरी दस्तावेज सत्यापन के लिए जमा करें।\n"
         "3. पुष्टि और फीस जानकारी के लिए स्कूल कार्यालय आएं।\n"
         "4. प्रवेश प्रक्रिया पूरी करें और जॉइनिंग जानकारी प्राप्त करें।"
+    ),
+}
+
+FEE_OVERVIEW_MESSAGE = {
+    "en": (
+        "Fee Structure - Session 2025-2026\n\n"
+        "P.S. Public School, Ganaur Road Bhurri (Sonipat), provides a disciplined "
+        "and supportive academic environment from foundational classes to senior "
+        "secondary streams. The school focuses on strong classroom learning, "
+        "regular academic monitoring, value-based education, co-curricular "
+        "activities, and parent communication.\n\n"
+        "The fee details below are shared class-wise for parent convenience. "
+        "For final confirmation, fee deposit dates, concessions if any, or account "
+        "support, please contact the school office."
+    ),
+    "hi": (
+        "फीस जानकारी - सत्र 2025-2026\n\n"
+        "पी.एस. पब्लिक स्कूल, गन्नौर रोड भूरी (सोनीपत), बच्चों को अनुशासित और "
+        "सहयोगी शैक्षणिक वातावरण प्रदान करता है। स्कूल में मजबूत कक्षा शिक्षण, "
+        "नियमित पढ़ाई की निगरानी, संस्कार आधारित शिक्षा, गतिविधियां और "
+        "अभिभावकों से संपर्क पर विशेष ध्यान दिया जाता है।\n\n"
+        "नीचे अभिभावकों की सुविधा के लिए कक्षा अनुसार फीस दी गई है। अंतिम पुष्टि, "
+        "फीस जमा तिथि, किसी भी छूट या अकाउंट सहायता के लिए कृपया स्कूल कार्यालय "
+        "से संपर्क करें।"
+    ),
+}
+
+FEE_STRUCTURE_MESSAGE = {
+    "en": (
+        "Class-wise Fee Structure\n"
+        "Session: 2025-2026\n\n"
+        "Fresh Admission Fee, Old Admission Fee, and Annual Charge are shown as "
+        "`-` where no amount is mentioned in the provided fee sheet.\n\n"
+        "```text\n"
+        "Class        Fresh  Old  Annual  Tuition  Reg  I-Card\n"
+        "NUR          -      -    -       1100     500  100\n"
+        "LKG          -      -    -       1200     500  100\n"
+        "UKG          -      -    -       1200     500  100\n"
+        "1ST          -      -    -       1200     500  100\n"
+        "2ND          -      -    -       1200     500  100\n"
+        "3RD          -      -    -       1200     500  100\n"
+        "4TH          -      -    -       1300     500  100\n"
+        "5TH          -      -    -       1300     500  100\n"
+        "6TH          -      -    -       1400     500  100\n"
+        "7TH          -      -    -       1400     500  100\n"
+        "8TH          -      -    -       1600     500  100\n"
+        "9TH          -      -    -       1800     500  100\n"
+        "10TH         -      -    -       1800     500  100\n"
+        "11TH Medical -      -    -       2100     500  100\n"
+        "11TH Comm.   -      -    -       2000     500  100\n"
+        "11TH Arts    -      -    -       2000     500  100\n"
+        "12TH Medical -      -    -       2100     500  100\n"
+        "12TH Comm.   -      -    -       2000     500  100\n"
+        "12TH Arts    -      -    -       2000     500  100\n"
+        "```\n\n"
+        "Additional Charges\n"
+        "- Exam Fee: Rs. 350\n"
+        "- Late Fee Charge: Rs. 50\n\n"
+        "For payment confirmation, receipt, or any fee-related query:\n"
+        "Call: +91 94162 93661\n"
+        "WhatsApp: +91 94168 38604"
+    ),
+    "hi": (
+        "कक्षा अनुसार फीस संरचना\n"
+        "सत्र: 2025-2026\n\n"
+        "Fresh Admission Fee, Old Admission Fee और Annual Charge में जहां राशि "
+        "नहीं दी गई है, वहां `-` लिखा गया है।\n\n"
+        "```text\n"
+        "कक्षा        Fresh  Old  Annual  Tuition  Reg  I-Card\n"
+        "NUR          -      -    -       1100     500  100\n"
+        "LKG          -      -    -       1200     500  100\n"
+        "UKG          -      -    -       1200     500  100\n"
+        "1ST          -      -    -       1200     500  100\n"
+        "2ND          -      -    -       1200     500  100\n"
+        "3RD          -      -    -       1200     500  100\n"
+        "4TH          -      -    -       1300     500  100\n"
+        "5TH          -      -    -       1300     500  100\n"
+        "6TH          -      -    -       1400     500  100\n"
+        "7TH          -      -    -       1400     500  100\n"
+        "8TH          -      -    -       1600     500  100\n"
+        "9TH          -      -    -       1800     500  100\n"
+        "10TH         -      -    -       1800     500  100\n"
+        "11TH Medical -      -    -       2100     500  100\n"
+        "11TH Comm.   -      -    -       2000     500  100\n"
+        "11TH Arts    -      -    -       2000     500  100\n"
+        "12TH Medical -      -    -       2100     500  100\n"
+        "12TH Comm.   -      -    -       2000     500  100\n"
+        "12TH Arts    -      -    -       2000     500  100\n"
+        "```\n\n"
+        "अतिरिक्त शुल्क\n"
+        "- परीक्षा शुल्क: Rs. 350\n"
+        "- लेट फीस: Rs. 50\n\n"
+        "फीस भुगतान, रसीद या किसी भी फीस संबंधी जानकारी के लिए:\n"
+        "फोन: +91 94162 93661\n"
+        "WhatsApp: +91 94168 38604"
     ),
 }
 
@@ -481,6 +587,11 @@ def send_admission_enquiry_flow(to_phone_number, language):
     run_later(4.5, send_admission_action_buttons, to_phone_number, language)
 
 
+def send_fee_structure_flow(to_phone_number, language):
+    send_text_message(to_phone_number, FEE_OVERVIEW_MESSAGE[language])
+    run_later(1.5, send_text_message, to_phone_number, FEE_STRUCTURE_MESSAGE[language])
+
+
 def set_language_and_start(to_phone_number, language):
     LANGUAGE_BY_USER[to_phone_number] = language
     confirmation = {
@@ -515,6 +626,14 @@ def reply_to_user(to_phone_number, message_text):
 
     if service_id == "admission_enquiry":
         send_admission_enquiry_flow(to_phone_number, language)
+        return
+
+    if service_id == "fee_structure":
+        send_fee_structure_flow(to_phone_number, language)
+        return
+
+    if service_id == "change_language":
+        send_language_buttons(to_phone_number)
         return
 
     if service_id in SERVICES:
