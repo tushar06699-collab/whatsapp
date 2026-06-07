@@ -12,3 +12,5 @@ services:
         sync: false
       - key: GRAPH_API_VERSION
         value: v20.0
+      - key: SCHOOL_IMAGE_URL
+        sync: false

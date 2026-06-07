@@ -3,7 +3,8 @@ import os
 
 import requests
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv()
 
@@ -11,36 +12,64 @@ VERIFY_TOKEN = "school_bot_verify"
 ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 GRAPH_API_VERSION = os.getenv("GRAPH_API_VERSION", "v20.0")
+SCHOOL_IMAGE_URL = os.getenv("SCHOOL_IMAGE_URL", "").strip()
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-MAIN_MENU = (
-    "🏫 Welcome to P.S. Public School\n\n"
-    "Please choose an option:\n\n"
-    "1️⃣ Admission Enquiry\n"
-    "2️⃣ Fee Structure\n"
-    "3️⃣ Transport Facility\n"
-    "4️⃣ Contact School"
+SCHOOL_INTRO = (
+    "\U0001f3eb Welcome to P.S. Public School\n\n"
+    "P.S. Public School is committed to quality education, discipline, "
+    "student safety, and all-round development. Our team focuses on building "
+    "strong academic foundations along with confidence, values, and life skills."
 )
 
-MENU_REPLIES = {
-    "1": "Admissions are open. Please call the school office for details.",
-    "2": "Please contact the school office for the latest fee structure.",
-    "3": "Transport facility is available on selected routes.",
-    "4": "Contact: +91XXXXXXXXXX",
+SERVICES = {
+    "admission_enquiry": {
+        "title": "Admission Enquiry",
+        "description": "Admission process and details",
+        "reply": "Admission Enquiry\n\nAdmissions are open. Please call the school office for details.",
+    },
+    "fee_structure": {
+        "title": "Fee Structure",
+        "description": "Latest school fee information",
+        "reply": "Fee Structure\n\nPlease contact the school office for the latest fee structure.",
+    },
+    "transport_facility": {
+        "title": "Transport Facility",
+        "description": "Bus routes and availability",
+        "reply": "Transport Facility\n\nTransport facility is available on selected routes.",
+    },
+    "contact_school": {
+        "title": "Contact School",
+        "description": "Phone number and office contact",
+        "reply": "Contact School\n\nContact: +91XXXXXXXXXX",
+    },
+    "other_services": {
+        "title": "Other Services",
+        "description": "Books, uniform, certificates, timing",
+        "reply": (
+            "Other Services\n\n"
+            "For books, uniforms, certificates, school timings, or general support, "
+            "please contact the school office."
+        ),
+    },
+}
+
+SERVICE_TITLE_TO_ID = {
+    service["title"].lower(): service_id for service_id, service in SERVICES.items()
 }
 
 
-def get_reply(message_text):
-    normalized_text = (message_text or "").strip()
-    return MENU_REPLIES.get(normalized_text, MAIN_MENU)
+def normalize_message(message_text):
+    return (message_text or "").strip().lower()
 
 
-def send_whatsapp_message(to_phone_number, message_text):
+def send_whatsapp_payload(payload):
     if not ACCESS_TOKEN or not PHONE_NUMBER_ID:
         logger.error("ACCESS_TOKEN and PHONE_NUMBER_ID must be set.")
         return False
@@ -49,13 +78,6 @@ def send_whatsapp_message(to_phone_number, message_text):
     headers = {
         "Authorization": f"Bearer {ACCESS_TOKEN}",
         "Content-Type": "application/json",
-    }
-    payload = {
-        "messaging_product": "whatsapp",
-        "recipient_type": "individual",
-        "to": to_phone_number,
-        "type": "text",
-        "text": {"preview_url": False, "body": message_text},
     }
 
     try:
@@ -67,6 +89,91 @@ def send_whatsapp_message(to_phone_number, message_text):
         return False
 
     return True
+
+
+def send_text_message(to_phone_number, message_text):
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to_phone_number,
+        "type": "text",
+        "text": {"preview_url": False, "body": message_text},
+    }
+    return send_whatsapp_payload(payload)
+
+
+def send_image_message(to_phone_number, image_url, caption):
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to_phone_number,
+        "type": "image",
+        "image": {"link": image_url, "caption": caption},
+    }
+    return send_whatsapp_payload(payload)
+
+
+def send_service_list_message(to_phone_number):
+    rows = [
+        {
+            "id": service_id,
+            "title": service["title"],
+            "description": service["description"],
+        }
+        for service_id, service in SERVICES.items()
+    ]
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to_phone_number,
+        "type": "interactive",
+        "interactive": {
+            "type": "list",
+            "header": {"type": "text", "text": "P.S. Public School"},
+            "body": {
+                "text": "Please tap below and select the service you need."
+            },
+            "footer": {"text": "We will guide you with the selected service."},
+            "action": {
+                "button": "View Services",
+                "sections": [
+                    {
+                        "title": "School Services",
+                        "rows": rows,
+                    }
+                ],
+            },
+        },
+    }
+    return send_whatsapp_payload(payload)
+
+
+def get_school_image_url():
+    if SCHOOL_IMAGE_URL:
+        return SCHOOL_IMAGE_URL
+
+    return url_for("static", filename="school.png", _external=True, _scheme="https")
+
+
+def send_school_intro(to_phone_number):
+    image_url = get_school_image_url()
+    if image_url:
+        return send_image_message(to_phone_number, image_url, SCHOOL_INTRO)
+
+    logger.warning("SCHOOL_IMAGE_URL is not set. Sending school intro as text.")
+    return send_text_message(to_phone_number, SCHOOL_INTRO)
+
+
+def reply_to_user(to_phone_number, message_text):
+    normalized_text = normalize_message(message_text)
+    service_id = SERVICE_TITLE_TO_ID.get(normalized_text, normalized_text)
+
+    if service_id in SERVICES:
+        send_text_message(to_phone_number, SERVICES[service_id]["reply"])
+        return
+
+    send_school_intro(to_phone_number)
+    send_service_list_message(to_phone_number)
 
 
 @app.get("/")
@@ -108,9 +215,13 @@ def receive_webhook():
                 incoming_text = ""
                 if message_type == "text":
                     incoming_text = message.get("text", {}).get("body", "")
+                elif message_type == "interactive":
+                    interactive = message.get("interactive", {})
+                    if interactive.get("type") == "list_reply":
+                        list_reply = interactive.get("list_reply", {})
+                        incoming_text = list_reply.get("id") or list_reply.get("title", "")
 
-                reply_text = get_reply(incoming_text)
-                send_whatsapp_message(sender, reply_text)
+                reply_to_user(sender, incoming_text)
 
     return jsonify({"status": "received"}), 200
 
