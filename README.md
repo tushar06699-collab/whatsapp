@@ -127,7 +127,7 @@ Menu responses:
 
 - `Admission Enquiry` - Professional admission flow with school highlights, contact details, admission form PDF, required documents, and fill-form option.
 - `Fee Structure` - School academic overview, then class-wise fee structure for session 2026-2027.
-- `Transport Facility` - Transport facility response.
+- `Transport Facility` - Transport overview, safety/route points, and monthly route-wise transport fee.
 - `Contact School` - School contact response.
 - `Other Services` - Other services response.
 
@@ -182,6 +182,19 @@ When a user selects `Fee Structure`, the bot sends:
    ```text
    Exam Fee: Rs. 350
    Late Fee Charge: Rs. 50
+   ```
+
+## Transport Facility Flow
+
+When a user selects `Transport Facility`, the bot sends:
+
+1. Transport facility details and important route/safety points.
+2. Monthly bus fee:
+
+   ```text
+   Rajpur, Kami, Garhi: Rs. 350
+   Rajlu Garhi, Lalheri, Bhigan: Rs. 400
+   Sonipat, Ganaur: Rs. 500
    ```
 
 ## Deploy on Render

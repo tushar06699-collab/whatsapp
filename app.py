@@ -81,8 +81,8 @@ SERVICES = {
             "hi": "बस रूट और उपलब्धता",
         },
         "reply": {
-            "en": "Transport Facility\n\nTransport facility is available on selected routes.",
-            "hi": "परिवहन सुविधा\n\nचयनित रूटों पर स्कूल परिवहन सुविधा उपलब्ध है।",
+            "en": "Transport Facility",
+            "hi": "परिवहन सुविधा",
         },
     },
     "contact_school": {
@@ -358,6 +358,70 @@ FEE_STRUCTURE_MESSAGE = {
     ),
 }
 
+TRANSPORT_OVERVIEW_MESSAGE = {
+    "en": (
+        "Transport Facility - P.S. Public School\n\n"
+        "P.S. Public School provides school transport on selected routes for the "
+        "convenience and safety of students. The school bus facility is planned "
+        "to support regular attendance, timely arrival, and comfortable travel "
+        "for children.\n\n"
+        "Key Points\n"
+        "- School bus facility available on selected routes.\n"
+        "- Students are picked and dropped at fixed points.\n"
+        "- Parents should ensure students reach the stop on time.\n"
+        "- Bus routes and seats are subject to availability.\n"
+        "- Any route change should be confirmed with the school office first.\n"
+        "- Monthly transport fee depends on route/location.\n\n"
+        "For route confirmation:\n"
+        "Call: +91 94162 93661\n"
+        "WhatsApp: +91 94168 38604"
+    ),
+    "hi": (
+        "परिवहन सुविधा - पी.एस. पब्लिक स्कूल\n\n"
+        "पी.एस. पब्लिक स्कूल विद्यार्थियों की सुविधा और सुरक्षा के लिए चयनित "
+        "रूटों पर स्कूल बस सुविधा उपलब्ध कराता है। यह सुविधा बच्चों की नियमित "
+        "उपस्थिति, समय पर स्कूल पहुंचने और आरामदायक यात्रा में मदद करती है।\n\n"
+        "मुख्य बातें\n"
+        "- चयनित रूटों पर स्कूल बस सुविधा उपलब्ध है।\n"
+        "- विद्यार्थियों को निर्धारित स्टॉप से पिक और ड्रॉप किया जाता है।\n"
+        "- अभिभावक कृपया बच्चे को समय पर स्टॉप पर पहुंचाएं।\n"
+        "- रूट और सीट उपलब्धता के अनुसार मिलेंगे।\n"
+        "- रूट बदलने से पहले स्कूल कार्यालय से पुष्टि करें।\n"
+        "- मासिक परिवहन शुल्क रूट/स्थान के अनुसार है।\n\n"
+        "रूट की पुष्टि के लिए:\n"
+        "फोन: +91 94162 93661\n"
+        "WhatsApp: +91 94168 38604"
+    ),
+}
+
+TRANSPORT_FEE_MESSAGE = {
+    "en": (
+        "Monthly Transport Fee\n\n"
+        "```text\n"
+        "Route / Area              Fee\n"
+        "Rajpur, Kami, Garhi       Rs. 350\n"
+        "Rajlu Garhi, Lalheri      Rs. 400\n"
+        "Bhigan                    Rs. 400\n"
+        "Sonipat, Ganaur           Rs. 500\n"
+        "```\n\n"
+        "Note: Transport facility is available only on selected routes. Final "
+        "pickup point, timing, and seat availability should be confirmed from "
+        "the school office."
+    ),
+    "hi": (
+        "मासिक परिवहन शुल्क\n\n"
+        "```text\n"
+        "रूट / स्थान               शुल्क\n"
+        "Rajpur, Kami, Garhi       Rs. 350\n"
+        "Rajlu Garhi, Lalheri      Rs. 400\n"
+        "Bhigan                    Rs. 400\n"
+        "Sonipat, Ganaur           Rs. 500\n"
+        "```\n\n"
+        "नोट: परिवहन सुविधा केवल चयनित रूटों पर उपलब्ध है। अंतिम पिकअप पॉइंट, "
+        "समय और सीट उपलब्धता की पुष्टि स्कूल कार्यालय से करें।"
+    ),
+}
+
 
 def normalize_message(message_text):
     return (message_text or "").strip().lower()
@@ -614,6 +678,11 @@ def send_fee_structure_flow(to_phone_number, language):
     run_later(1.5, send_text_message, to_phone_number, FEE_STRUCTURE_MESSAGE[language])
 
 
+def send_transport_facility_flow(to_phone_number, language):
+    send_text_message(to_phone_number, TRANSPORT_OVERVIEW_MESSAGE[language])
+    run_later(1.5, send_text_message, to_phone_number, TRANSPORT_FEE_MESSAGE[language])
+
+
 def set_language_and_start(to_phone_number, language):
     LANGUAGE_BY_USER[to_phone_number] = language
     confirmation = {
@@ -652,6 +721,10 @@ def reply_to_user(to_phone_number, message_text):
 
     if service_id == "fee_structure":
         send_fee_structure_flow(to_phone_number, language)
+        return
+
+    if service_id == "transport_facility":
+        send_transport_facility_flow(to_phone_number, language)
         return
 
     if service_id == "change_language":
