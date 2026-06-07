@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 
 import requests
 from dotenv import load_dotenv
@@ -13,6 +14,7 @@ ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 GRAPH_API_VERSION = os.getenv("GRAPH_API_VERSION", "v20.0")
 SCHOOL_IMAGE_URL = os.getenv("SCHOOL_IMAGE_URL", "").strip()
+SERVICE_MENU_DELAY_SECONDS = float(os.getenv("SERVICE_MENU_DELAY_SECONDS", "3"))
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
@@ -172,7 +174,10 @@ def reply_to_user(to_phone_number, message_text):
         send_text_message(to_phone_number, SERVICES[service_id]["reply"])
         return
 
-    send_school_intro(to_phone_number)
+    intro_sent = send_school_intro(to_phone_number)
+    if intro_sent and SERVICE_MENU_DELAY_SECONDS > 0:
+        time.sleep(SERVICE_MENU_DELAY_SECONDS)
+
     send_service_list_message(to_phone_number)
 
 
