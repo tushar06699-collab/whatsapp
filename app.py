@@ -1159,6 +1159,14 @@ def handle_student_details_session(to_phone_number, message_text):
         password = message_text.strip()
         STUDENT_DETAIL_SESSIONS.pop(to_phone_number, None)
 
+        send_text_message(
+            to_phone_number,
+            {
+                "en": "Please wait. Fetching student details from the school exam portal...",
+                "hi": "कृपया प्रतीक्षा करें। स्कूल exam portal से विद्यार्थी विवरण निकाला जा रहा है...",
+            }[language],
+        )
+
         result = fetch_student_details(username, password)
         if not result["ok"]:
             send_text_message(
