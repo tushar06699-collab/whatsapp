@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import threading
 
 import requests
@@ -564,10 +565,12 @@ STUDENT_LOGIN_TEXT = {
     "ask_password": {
         "en": (
             "Now please send the student's DOB exactly as saved in the exam portal.\n\n"
+            "You can send it as DD/MM/YYYY or DDMMYYYY.\n\n"
             "For privacy, this is used only for login verification and is not stored."
         ),
         "hi": (
             "अब कृपया विद्यार्थी की DOB भेजें, बिल्कुल वैसे ही जैसे exam portal में saved है।\n\n"
+            "आप DOB को DD/MM/YYYY या DDMMYYYY format में भेज सकते हैं।\n\n"
             "गोपनीयता के लिए यह केवल login verification के लिए उपयोग होगा, store नहीं किया जाएगा।"
         ),
     },
@@ -937,11 +940,62 @@ def start_student_details_flow(to_phone_number, language):
     send_text_message(to_phone_number, STUDENT_LOGIN_TEXT["ask_username"][language])
 
 
+def normalize_dob_for_exam_login(raw_password):
+    value = str(raw_password or "").strip()
+    digits = re.sub(r"\D", "", value)
+    if len(digits) == 8:
+        return f"{digits[0:2]}/{digits[2:4]}/{digits[4:8]}"
+
+    normalized = value.replace("-", "/").replace(".", "/")
+    return normalized
+
+
+def get_exam_backend_base_url():
+    if "/login" in EXAM_BACKEND_STUDENT_LOGIN_URL:
+        return EXAM_BACKEND_STUDENT_LOGIN_URL.rsplit("/login", 1)[0].rstrip("/")
+
+    return EXAM_BACKEND_STUDENT_LOGIN_URL.rstrip("/")
+
+
+def fetch_student_profile(student):
+    student_id = (
+        student.get("id")
+        or student.get("_id")
+        or student.get("student_id")
+        or student.get("studentId")
+    )
+    if not student_id:
+        return student
+
+    profile_url = f"{get_exam_backend_base_url()}/portal/student/{student_id}"
+    try:
+        response = requests.get(profile_url, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+    except requests.RequestException as exc:
+        logger.warning("Student profile fetch failed: %s", exc)
+        return student
+    except ValueError:
+        logger.warning("Student profile returned non-JSON response.")
+        return student
+
+    profile = data.get("student") or data.get("data") or data
+    if isinstance(profile, dict):
+        merged = dict(student)
+        merged.update(profile)
+        return merged
+
+    return student
+
+
 def fetch_student_details(username, password):
     if not EXAM_BACKEND_STUDENT_LOGIN_URL:
         return {"ok": False, "reason": "missing_url"}
 
-    payload = {"username": username, "password": password}
+    payload = {
+        "username": str(username or "").strip(),
+        "password": normalize_dob_for_exam_login(password),
+    }
     try:
         response = requests.post(
             EXAM_BACKEND_STUDENT_LOGIN_URL,
@@ -988,6 +1042,7 @@ def fetch_student_details(username, password):
     if not isinstance(student, dict):
         return {"ok": False, "reason": "server_error"}
 
+    student = fetch_student_profile(student)
     return {"ok": True, "student": student}
 
 
@@ -1004,6 +1059,10 @@ def format_student_details(student, language):
         (
             {"en": "Name", "hi": "नाम"}[language],
             ["name", "student_name", "full_name", "studentName"],
+        ),
+        (
+            {"en": "Admission No.", "hi": "प्रवेश नंबर"}[language],
+            ["admission_no", "admissionNo"],
         ),
         (
             {"en": "Class", "hi": "कक्षा"}[language],
@@ -1033,6 +1092,10 @@ def format_student_details(student, language):
             {"en": "Address", "hi": "पता"}[language],
             ["address", "student_address", "studentAddress"],
         ),
+        (
+            {"en": "Session", "hi": "सत्र"}[language],
+            ["session"],
+        ),
     ]
 
     title = {
@@ -1046,6 +1109,19 @@ def format_student_details(student, language):
     username = first_present(student, ["username", "user_name", "login_id", "loginId"])
     if username != "-":
         lines.append(f"Username: {username}")
+
+    release_rollno = student.get("release_rollno")
+    release_result = student.get("release_result")
+    eligible = student.get("eligible")
+    if release_rollno is not None or release_result is not None or eligible is not None:
+        lines.append("")
+        lines.append({"en": "Portal Access", "hi": "Portal Access"}[language])
+        if eligible is not None:
+            lines.append(f"Eligible: {'Yes' if eligible else 'No'}")
+        if release_rollno is not None:
+            lines.append(f"Roll No. Released: {'Yes' if release_rollno else 'No'}")
+        if release_result is not None:
+            lines.append(f"Result Released: {'Yes' if release_result else 'No'}")
 
     footer = {
         "en": (
