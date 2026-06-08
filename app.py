@@ -1158,31 +1158,36 @@ def handle_student_details_session(to_phone_number, message_text):
         username = session.get("username", "")
         password = message_text.strip()
         STUDENT_DETAIL_SESSIONS.pop(to_phone_number, None)
-
-        send_text_message(
-            to_phone_number,
-            {
-                "en": "Please wait. Fetching student details from the school exam portal...",
-                "hi": "कृपया प्रतीक्षा करें। स्कूल exam portal से विद्यार्थी विवरण निकाला जा रहा है...",
-            }[language],
-        )
-
-        result = fetch_student_details(username, password)
-        if not result["ok"]:
-            send_text_message(
-                to_phone_number,
-                STUDENT_LOGIN_TEXT[result["reason"]][language],
-            )
-            return True
-
-        send_text_message(
-            to_phone_number,
-            format_student_details(result["student"], language),
-        )
+        run_later(0.1, process_student_details_login, to_phone_number, username, password, language)
         return True
 
     STUDENT_DETAIL_SESSIONS.pop(to_phone_number, None)
     return False
+
+
+def process_student_details_login(to_phone_number, username, password, language):
+    try:
+        result = fetch_student_details(username, password)
+    except Exception as exc:
+        logger.exception("Unexpected student details error: %s", exc)
+        send_text_message(to_phone_number, STUDENT_LOGIN_TEXT["server_error"][language])
+        return
+
+    if not result["ok"]:
+        send_text_message(
+            to_phone_number,
+            STUDENT_LOGIN_TEXT[result["reason"]][language],
+        )
+        return
+
+    try:
+        details_message = format_student_details(result["student"], language)
+    except Exception as exc:
+        logger.exception("Failed to format student details: %s", exc)
+        send_text_message(to_phone_number, STUDENT_LOGIN_TEXT["server_error"][language])
+        return
+
+    send_text_message(to_phone_number, details_message)
 
 
 def set_language_and_start(to_phone_number, language):
