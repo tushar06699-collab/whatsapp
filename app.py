@@ -20,7 +20,10 @@ ONLINE_ADMISSION_FORM_URL = os.getenv(
     "ONLINE_ADMISSION_FORM_URL",
     "https://pspublicschool.com",
 ).strip()
-EXAM_BACKEND_STUDENT_LOGIN_URL = os.getenv("EXAM_BACKEND_STUDENT_LOGIN_URL", "").strip()
+EXAM_BACKEND_STUDENT_LOGIN_URL = os.getenv(
+    "EXAM_BACKEND_STUDENT_LOGIN_URL",
+    "https://exam-backend-117372286918.asia-south1.run.app/login",
+).strip()
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
@@ -551,21 +554,21 @@ STUDENT_LOGIN_TEXT = {
     "ask_username": {
         "en": (
             "Student Details Login\n\n"
-            "Please send the student username used on the exam portal."
+            "Please send the student's admission number."
         ),
         "hi": (
             "विद्यार्थी विवरण लॉगिन\n\n"
-            "कृपया exam portal वाला विद्यार्थी username भेजें।"
+            "कृपया विद्यार्थी का admission number भेजें।"
         ),
     },
     "ask_password": {
         "en": (
-            "Now please send the password.\n\n"
-            "For privacy, this password is used only for login verification and is not stored."
+            "Now please send the student's DOB exactly as saved in the exam portal.\n\n"
+            "For privacy, this is used only for login verification and is not stored."
         ),
         "hi": (
-            "अब कृपया password भेजें।\n\n"
-            "गोपनीयता के लिए password केवल login verification के लिए उपयोग होगा, store नहीं किया जाएगा।"
+            "अब कृपया विद्यार्थी की DOB भेजें, बिल्कुल वैसे ही जैसे exam portal में saved है।\n\n"
+            "गोपनीयता के लिए यह केवल login verification के लिए उपयोग होगा, store नहीं किया जाएगा।"
         ),
     },
     "cancelled": {
@@ -586,11 +589,11 @@ STUDENT_LOGIN_TEXT = {
     },
     "login_failed": {
         "en": (
-            "Login failed. Please check the username and password, then try again.\n\n"
+            "Login failed. Please check the admission number and DOB, then try again.\n\n"
             "To restart, select Student Details again."
         ),
         "hi": (
-            "Login failed. कृपया username और password जांचकर दोबारा प्रयास करें।\n\n"
+            "Login failed. कृपया admission number और DOB जांचकर दोबारा प्रयास करें।\n\n"
             "फिर से शुरू करने के लिए Student Details चुनें।"
         ),
     },
@@ -600,6 +603,14 @@ STUDENT_LOGIN_TEXT = {
         ),
         "hi": (
             "अभी विद्यार्थी विवरण प्राप्त नहीं हो पाया। कृपया बाद में प्रयास करें या स्कूल कार्यालय से संपर्क करें।"
+        ),
+    },
+    "not_student": {
+        "en": (
+            "This login was verified, but it is not a student login. Please use the student's admission number and DOB."
+        ),
+        "hi": (
+            "Login verify हुआ, लेकिन यह student login नहीं है। कृपया विद्यार्थी का admission number और DOB उपयोग करें।"
         ),
     },
 }
@@ -942,6 +953,7 @@ def fetch_student_details(username, password):
         return {"ok": False, "reason": "server_error"}
 
     if response.status_code in {401, 403, 404}:
+        logger.warning("Student login failed: %s", response.text)
         return {"ok": False, "reason": "login_failed"}
 
     if not response.ok:
@@ -959,7 +971,12 @@ def fetch_student_details(username, password):
         return {"ok": False, "reason": "server_error"}
 
     if data.get("success") is False or data.get("error"):
+        logger.warning("Student login backend rejected credentials: %s", data)
         return {"ok": False, "reason": "login_failed"}
+
+    if data.get("role") and data.get("role") != "student":
+        logger.warning("Student details login returned non-student role: %s", data.get("role"))
+        return {"ok": False, "reason": "not_student"}
 
     student = (
         data.get("student")

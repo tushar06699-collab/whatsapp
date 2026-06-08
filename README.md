@@ -274,7 +274,7 @@ The `Other Services -> Student Details` option asks for the student's exam porta
 Set this in Render:
 
 ```text
-EXAM_BACKEND_STUDENT_LOGIN_URL=https://YOUR-EXAM-BACKEND.onrender.com/student-login-api
+EXAM_BACKEND_STUDENT_LOGIN_URL=https://exam-backend-117372286918.asia-south1.run.app/login
 ```
 
 Use the same student login API endpoint that your exam frontend login page uses.
