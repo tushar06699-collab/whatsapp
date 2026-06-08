@@ -20,6 +20,7 @@ ONLINE_ADMISSION_FORM_URL = os.getenv(
     "ONLINE_ADMISSION_FORM_URL",
     "https://pspublicschool.com",
 ).strip()
+EXAM_BACKEND_STUDENT_LOGIN_URL = os.getenv("EXAM_BACKEND_STUDENT_LOGIN_URL", "").strip()
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 # In-memory language preference. For Render's normal single web instance this is enough.
 # For multiple workers/instances, move this to a small database or Redis.
 LANGUAGE_BY_USER = {}
+STUDENT_DETAIL_SESSIONS = {}
 
 LANGUAGE_LABELS = {
     "en": "English",
@@ -136,6 +138,129 @@ SERVICES = {
         "reply": {
             "en": "Change Language",
             "hi": "भाषा बदलें",
+        },
+    },
+}
+
+OTHER_SERVICE_CATEGORIES = {
+    "academic_support": {
+        "title": {"en": "Academic Support", "hi": "शैक्षणिक सहायता"},
+        "description": {
+            "en": "Classes, syllabus, homework support",
+            "hi": "कक्षा, सिलेबस, होमवर्क",
+        },
+        "reply": {
+            "en": (
+                "Academic Support\n\n"
+                "This service is currently unavailable on WhatsApp.\n\n"
+                "For syllabus, homework, exam preparation, or teacher communication, "
+                "please contact the school office."
+            ),
+            "hi": (
+                "शैक्षणिक सहायता\n\n"
+                "यह सेवा फिलहाल WhatsApp पर उपलब्ध नहीं है।\n\n"
+                "सिलेबस, होमवर्क, परीक्षा तैयारी या शिक्षक से संपर्क के लिए कृपया "
+                "स्कूल कार्यालय से संपर्क करें।"
+            ),
+        },
+    },
+    "student_details": {
+        "title": {"en": "Student Details", "hi": "विद्यार्थी विवरण"},
+        "description": {
+            "en": "Update student or parent information",
+            "hi": "विद्यार्थी/अभिभावक जानकारी",
+        },
+        "reply": {
+            "en": (
+                "Student Details\n\n"
+                "For updating student name, class, section, address, parent mobile "
+                "number, Aadhaar details, or emergency contact, please visit the "
+                "school office with valid proof."
+            ),
+            "hi": (
+                "विद्यार्थी विवरण\n\n"
+                "विद्यार्थी का नाम, कक्षा, सेक्शन, पता, अभिभावक मोबाइल नंबर, आधार "
+                "विवरण या इमरजेंसी संपर्क अपडेट कराने के लिए कृपया सही प्रमाण के "
+                "साथ स्कूल कार्यालय में संपर्क करें।"
+            ),
+        },
+    },
+    "results_exams": {
+        "title": {"en": "Results & Exams", "hi": "रिजल्ट व परीक्षा"},
+        "description": {
+            "en": "Exam schedule, marks, report card",
+            "hi": "परीक्षा, अंक, रिपोर्ट कार्ड",
+        },
+        "reply": {
+            "en": (
+                "Results & Exams\n\n"
+                "For exam dates, marks, report cards, rechecking guidance, or result "
+                "collection, please contact the school office or concerned class teacher."
+            ),
+            "hi": (
+                "रिजल्ट व परीक्षा\n\n"
+                "परीक्षा तिथि, अंक, रिपोर्ट कार्ड, री-चेकिंग जानकारी या रिजल्ट "
+                "लेने के लिए कृपया स्कूल कार्यालय या संबंधित कक्षा शिक्षक से संपर्क करें।"
+            ),
+        },
+    },
+    "certificates": {
+        "title": {"en": "Certificates", "hi": "प्रमाण पत्र"},
+        "description": {
+            "en": "TC, bonafide, character certificate",
+            "hi": "TC, बोनाफाइड, कैरेक्टर",
+        },
+        "reply": {
+            "en": (
+                "Certificates\n\n"
+                "For transfer certificate, bonafide certificate, character certificate, "
+                "or any school document, submit a written request at the school office. "
+                "Processing time may depend on record verification."
+            ),
+            "hi": (
+                "प्रमाण पत्र\n\n"
+                "ट्रांसफर सर्टिफिकेट, बोनाफाइड, कैरेक्टर सर्टिफिकेट या किसी भी "
+                "स्कूल दस्तावेज के लिए स्कूल कार्यालय में लिखित आवेदन दें। रिकॉर्ड "
+                "सत्यापन के अनुसार समय लग सकता है।"
+            ),
+        },
+    },
+    "uniform_books": {
+        "title": {"en": "Uniform & Books", "hi": "यूनिफॉर्म व किताबें"},
+        "description": {
+            "en": "Uniform, books, notebooks guidance",
+            "hi": "यूनिफॉर्म, किताबें, कॉपी",
+        },
+        "reply": {
+            "en": (
+                "Uniform & Books\n\n"
+                "For class-wise book list, notebooks, school uniform, tie, belt, ID "
+                "card, or related guidance, please contact the school office."
+            ),
+            "hi": (
+                "यूनिफॉर्म व किताबें\n\n"
+                "कक्षा अनुसार किताबों की सूची, कॉपी, स्कूल यूनिफॉर्म, टाई, बेल्ट, "
+                "आई-कार्ड या संबंधित जानकारी के लिए स्कूल कार्यालय से संपर्क करें।"
+            ),
+        },
+    },
+    "school_timing": {
+        "title": {"en": "School Timing", "hi": "स्कूल समय"},
+        "description": {
+            "en": "School hours and office timing",
+            "hi": "स्कूल और कार्यालय समय",
+        },
+        "reply": {
+            "en": (
+                "School Timing\n\n"
+                "For current school timing, office hours, holiday updates, or special "
+                "schedule changes, please contact the school office before visiting."
+            ),
+            "hi": (
+                "स्कूल समय\n\n"
+                "वर्तमान स्कूल समय, कार्यालय समय, छुट्टी अपडेट या विशेष समय बदलाव "
+                "की जानकारी के लिए आने से पहले स्कूल कार्यालय से संपर्क करें।"
+            ),
         },
     },
 }
@@ -434,6 +559,13 @@ def service_title_to_id(language):
     }
 
 
+def other_service_title_to_id(language):
+    return {
+        category["title"][language].lower(): category_id
+        for category_id, category in OTHER_SERVICE_CATEGORIES.items()
+    }
+
+
 def send_whatsapp_payload(payload):
     if not ACCESS_TOKEN or not PHONE_NUMBER_ID:
         logger.error("ACCESS_TOKEN and PHONE_NUMBER_ID must be set.")
@@ -614,6 +746,52 @@ def send_service_list_message(to_phone_number, language):
     return send_whatsapp_payload(payload)
 
 
+def send_other_services_list_message(to_phone_number, language):
+    rows = [
+        {
+            "id": category_id,
+            "title": category["title"][language],
+            "description": category["description"][language],
+        }
+        for category_id, category in OTHER_SERVICE_CATEGORIES.items()
+    ]
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to_phone_number,
+        "type": "interactive",
+        "interactive": {
+            "type": "list",
+            "header": {
+                "type": "text",
+                "text": {"en": "Other Services", "hi": "अन्य सेवाएं"}[language],
+            },
+            "body": {
+                "text": {
+                    "en": "Please select the category you need help with.",
+                    "hi": "कृपया वह श्रेणी चुनें जिसमें आपको सहायता चाहिए।",
+                }[language]
+            },
+            "footer": {
+                "text": {
+                    "en": "P.S. Public School support",
+                    "hi": "पी.एस. पब्लिक स्कूल सहायता",
+                }[language]
+            },
+            "action": {
+                "button": {"en": "View Categories", "hi": "श्रेणी देखें"}[language],
+                "sections": [
+                    {
+                        "title": {"en": "Support Categories", "hi": "सहायता श्रेणियां"}[language],
+                        "rows": rows,
+                    }
+                ],
+            },
+        },
+    }
+    return send_whatsapp_payload(payload)
+
+
 def get_school_image_url():
     if SCHOOL_IMAGE_URL:
         return SCHOOL_IMAGE_URL
@@ -727,8 +905,20 @@ def reply_to_user(to_phone_number, message_text):
         send_transport_facility_flow(to_phone_number, language)
         return
 
+    if service_id == "other_services":
+        send_other_services_list_message(to_phone_number, language)
+        return
+
     if service_id == "change_language":
         send_language_buttons(to_phone_number)
+        return
+
+    other_category_id = other_service_title_to_id(language).get(normalized_text, normalized_text)
+    if other_category_id in OTHER_SERVICE_CATEGORIES:
+        send_text_message(
+            to_phone_number,
+            OTHER_SERVICE_CATEGORIES[other_category_id]["reply"][language],
+        )
         return
 
     if service_id in SERVICES:

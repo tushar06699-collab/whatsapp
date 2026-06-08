@@ -129,7 +129,7 @@ Menu responses:
 - `Fee Structure` - School academic overview, then class-wise fee structure for session 2026-2027.
 - `Transport Facility` - Transport overview, safety/route points, and monthly route-wise transport fee.
 - `Contact School` - School contact response.
-- `Other Services` - Other services response.
+- `Other Services` - Opens a category menu for academics, student details, results, certificates, uniform/books, and school timing.
 
 To use a different school photo, replace `static/school.png` or set `SCHOOL_IMAGE_URL` to any public HTTPS image URL.
 
@@ -196,6 +196,30 @@ When a user selects `Transport Facility`, the bot sends:
    Rajlu Garhi, Lalheri, Bhigan: Rs. 400
    Sonipat, Ganaur: Rs. 500
    ```
+
+## Other Services Flow
+
+When a user selects `Other Services`, the bot opens a second category menu:
+
+```text
+Academic Support
+Student Details
+Results & Exams
+Certificates
+Uniform & Books
+School Timing
+```
+
+In Hindi:
+
+```text
+शैक्षणिक सहायता
+विद्यार्थी विवरण
+रिजल्ट व परीक्षा
+प्रमाण पत्र
+यूनिफॉर्म व किताबें
+स्कूल समय
+```
 
 ## Deploy on Render
 
