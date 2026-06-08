@@ -20,3 +20,5 @@ services:
         sync: false
       - key: ONLINE_ADMISSION_FORM_URL
         value: https://pspublicschool.com
+      - key: EXAM_BACKEND_STUDENT_LOGIN_URL
+        sync: false

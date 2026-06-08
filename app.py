@@ -547,6 +547,63 @@ TRANSPORT_FEE_MESSAGE = {
     ),
 }
 
+STUDENT_LOGIN_TEXT = {
+    "ask_username": {
+        "en": (
+            "Student Details Login\n\n"
+            "Please send the student username used on the exam portal."
+        ),
+        "hi": (
+            "विद्यार्थी विवरण लॉगिन\n\n"
+            "कृपया exam portal वाला विद्यार्थी username भेजें।"
+        ),
+    },
+    "ask_password": {
+        "en": (
+            "Now please send the password.\n\n"
+            "For privacy, this password is used only for login verification and is not stored."
+        ),
+        "hi": (
+            "अब कृपया password भेजें।\n\n"
+            "गोपनीयता के लिए password केवल login verification के लिए उपयोग होगा, store नहीं किया जाएगा।"
+        ),
+    },
+    "cancelled": {
+        "en": "Student details login cancelled.",
+        "hi": "विद्यार्थी विवरण लॉगिन रद्द कर दिया गया है।",
+    },
+    "missing_url": {
+        "en": (
+            "Student Details service is ready, but the exam backend login URL is not configured.\n\n"
+            "Please add this environment variable in Render:\n"
+            "EXAM_BACKEND_STUDENT_LOGIN_URL=https://YOUR-EXAM-BACKEND/student-login-api"
+        ),
+        "hi": (
+            "विद्यार्थी विवरण सेवा तैयार है, लेकिन exam backend login URL configure नहीं है।\n\n"
+            "कृपया Render में यह environment variable जोड़ें:\n"
+            "EXAM_BACKEND_STUDENT_LOGIN_URL=https://YOUR-EXAM-BACKEND/student-login-api"
+        ),
+    },
+    "login_failed": {
+        "en": (
+            "Login failed. Please check the username and password, then try again.\n\n"
+            "To restart, select Student Details again."
+        ),
+        "hi": (
+            "Login failed. कृपया username और password जांचकर दोबारा प्रयास करें।\n\n"
+            "फिर से शुरू करने के लिए Student Details चुनें।"
+        ),
+    },
+    "server_error": {
+        "en": (
+            "Student details could not be fetched right now. Please try again later or contact the school office."
+        ),
+        "hi": (
+            "अभी विद्यार्थी विवरण प्राप्त नहीं हो पाया। कृपया बाद में प्रयास करें या स्कूल कार्यालय से संपर्क करें।"
+        ),
+    },
+}
+
 
 def normalize_message(message_text):
     return (message_text or "").strip().lower()
@@ -861,6 +918,172 @@ def send_transport_facility_flow(to_phone_number, language):
     run_later(1.5, send_text_message, to_phone_number, TRANSPORT_FEE_MESSAGE[language])
 
 
+def start_student_details_flow(to_phone_number, language):
+    STUDENT_DETAIL_SESSIONS[to_phone_number] = {
+        "step": "awaiting_username",
+        "language": language,
+    }
+    send_text_message(to_phone_number, STUDENT_LOGIN_TEXT["ask_username"][language])
+
+
+def fetch_student_details(username, password):
+    if not EXAM_BACKEND_STUDENT_LOGIN_URL:
+        return {"ok": False, "reason": "missing_url"}
+
+    payload = {"username": username, "password": password}
+    try:
+        response = requests.post(
+            EXAM_BACKEND_STUDENT_LOGIN_URL,
+            json=payload,
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        logger.error("Student login request failed: %s", exc)
+        return {"ok": False, "reason": "server_error"}
+
+    if response.status_code in {401, 403, 404}:
+        return {"ok": False, "reason": "login_failed"}
+
+    if not response.ok:
+        logger.error(
+            "Student login backend returned %s: %s",
+            response.status_code,
+            response.text,
+        )
+        return {"ok": False, "reason": "server_error"}
+
+    try:
+        data = response.json()
+    except ValueError:
+        logger.error("Student login backend returned non-JSON response.")
+        return {"ok": False, "reason": "server_error"}
+
+    if data.get("success") is False or data.get("error"):
+        return {"ok": False, "reason": "login_failed"}
+
+    student = (
+        data.get("student")
+        or data.get("student_details")
+        or data.get("user")
+        or data.get("data")
+        or data
+    )
+    if not isinstance(student, dict):
+        return {"ok": False, "reason": "server_error"}
+
+    return {"ok": True, "student": student}
+
+
+def first_present(data, keys):
+    for key in keys:
+        value = data.get(key)
+        if value not in {None, ""}:
+            return str(value)
+    return "-"
+
+
+def format_student_details(student, language):
+    fields = [
+        (
+            {"en": "Name", "hi": "नाम"}[language],
+            ["name", "student_name", "full_name", "studentName"],
+        ),
+        (
+            {"en": "Class", "hi": "कक्षा"}[language],
+            ["class", "class_name", "student_class", "className"],
+        ),
+        (
+            {"en": "Section", "hi": "सेक्शन"}[language],
+            ["section", "section_name", "sectionName"],
+        ),
+        (
+            {"en": "Roll No.", "hi": "रोल नंबर"}[language],
+            ["roll_no", "roll", "roll_number", "rollNo"],
+        ),
+        (
+            {"en": "Father Name", "hi": "पिता का नाम"}[language],
+            ["father_name", "father", "fatherName"],
+        ),
+        (
+            {"en": "Mother Name", "hi": "माता का नाम"}[language],
+            ["mother_name", "mother", "motherName"],
+        ),
+        (
+            {"en": "Mobile", "hi": "मोबाइल"}[language],
+            ["mobile", "phone", "contact", "parent_mobile", "parentMobile"],
+        ),
+        (
+            {"en": "Address", "hi": "पता"}[language],
+            ["address", "student_address", "studentAddress"],
+        ),
+    ]
+
+    title = {
+        "en": "Student Details",
+        "hi": "विद्यार्थी विवरण",
+    }[language]
+    lines = [title, ""]
+    for label, keys in fields:
+        lines.append(f"{label}: {first_present(student, keys)}")
+
+    username = first_present(student, ["username", "user_name", "login_id", "loginId"])
+    if username != "-":
+        lines.append(f"Username: {username}")
+
+    footer = {
+        "en": (
+            "\nFor any correction in student details, please visit the school office with valid proof."
+        ),
+        "hi": (
+            "\nविद्यार्थी विवरण में सुधार के लिए कृपया सही प्रमाण के साथ स्कूल कार्यालय में संपर्क करें।"
+        ),
+    }[language]
+    lines.append(footer)
+    return "\n".join(lines)
+
+
+def handle_student_details_session(to_phone_number, message_text):
+    session = STUDENT_DETAIL_SESSIONS.get(to_phone_number)
+    if not session:
+        return False
+
+    language = session.get("language") or LANGUAGE_BY_USER.get(to_phone_number, "en")
+    normalized_text = normalize_message(message_text)
+
+    if normalized_text in {"cancel", "stop", "रद्द", "बंद"}:
+        STUDENT_DETAIL_SESSIONS.pop(to_phone_number, None)
+        send_text_message(to_phone_number, STUDENT_LOGIN_TEXT["cancelled"][language])
+        return True
+
+    if session.get("step") == "awaiting_username":
+        session["username"] = message_text.strip()
+        session["step"] = "awaiting_password"
+        send_text_message(to_phone_number, STUDENT_LOGIN_TEXT["ask_password"][language])
+        return True
+
+    if session.get("step") == "awaiting_password":
+        username = session.get("username", "")
+        password = message_text.strip()
+        STUDENT_DETAIL_SESSIONS.pop(to_phone_number, None)
+
+        result = fetch_student_details(username, password)
+        if not result["ok"]:
+            send_text_message(
+                to_phone_number,
+                STUDENT_LOGIN_TEXT[result["reason"]][language],
+            )
+            return True
+
+        send_text_message(
+            to_phone_number,
+            format_student_details(result["student"], language),
+        )
+        return True
+
+    STUDENT_DETAIL_SESSIONS.pop(to_phone_number, None)
+    return False
+
+
 def set_language_and_start(to_phone_number, language):
     LANGUAGE_BY_USER[to_phone_number] = language
     confirmation = {
@@ -880,6 +1103,9 @@ def reply_to_user(to_phone_number, message_text):
 
     if normalized_text in {"language_hi", "hindi", "हिंदी", "हिन्दी"}:
         set_language_and_start(to_phone_number, "hi")
+        return
+
+    if handle_student_details_session(to_phone_number, message_text):
         return
 
     language = LANGUAGE_BY_USER.get(to_phone_number)
@@ -914,6 +1140,10 @@ def reply_to_user(to_phone_number, message_text):
         return
 
     other_category_id = other_service_title_to_id(language).get(normalized_text, normalized_text)
+    if other_category_id == "student_details":
+        start_student_details_flow(to_phone_number, language)
+        return
+
     if other_category_id in OTHER_SERVICE_CATEGORIES:
         send_text_message(
             to_phone_number,

@@ -266,3 +266,15 @@ Subscribe to the WhatsApp `messages` webhook field.
 - This app only sends replies from the incoming `POST /webhook` handler.
 - It does not contain any route, scheduler, startup task, or background job that sends outbound messages first.
 - Keep `ACCESS_TOKEN` private and never commit your real `.env` file.
+
+## Student Details Setup
+
+The `Other Services -> Student Details` option asks for the student's exam portal username and password, then calls the exam backend login API.
+
+Set this in Render:
+
+```text
+EXAM_BACKEND_STUDENT_LOGIN_URL=https://YOUR-EXAM-BACKEND.onrender.com/student-login-api
+```
+
+Use the same student login API endpoint that your exam frontend login page uses.
