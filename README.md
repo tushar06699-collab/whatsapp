@@ -219,6 +219,17 @@ School Timing
 
 If the student is not already verified, the bot first asks for admission number and DOB.
 
+`Certificates` opens a certificate type menu:
+
+```text
+Bonafide Certificate
+Character Certificate
+Study Certificate
+Transfer Certificate
+```
+
+Bonafide, Character, and Study certificates are generated as PDF from the verified student record. Transfer Certificate shows office contact instructions because TC requires official office verification and signature/stamp.
+
 In Hindi:
 
 ```text

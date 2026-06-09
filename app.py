@@ -281,6 +281,41 @@ OTHER_SERVICE_CATEGORIES = {
     },
 }
 
+CERTIFICATE_CATEGORIES = {
+    "certificate_bonafide": {
+        "title": {"en": "Bonafide Certificate", "hi": "बोनाफाइड प्रमाण पत्र"},
+        "description": {
+            "en": "Student identity and school record",
+            "hi": "विद्यार्थी और स्कूल रिकॉर्ड",
+        },
+        "certificate_type": "bonafide",
+    },
+    "certificate_character": {
+        "title": {"en": "Character Certificate", "hi": "चरित्र प्रमाण पत्र"},
+        "description": {
+            "en": "Conduct and character certificate",
+            "hi": "आचरण और चरित्र प्रमाण",
+        },
+        "certificate_type": "character",
+    },
+    "certificate_study": {
+        "title": {"en": "Study Certificate", "hi": "अध्ययन प्रमाण पत्र"},
+        "description": {
+            "en": "Class and session study proof",
+            "hi": "कक्षा और सत्र प्रमाण",
+        },
+        "certificate_type": "study",
+    },
+    "certificate_tc": {
+        "title": {"en": "Transfer Certificate", "hi": "ट्रांसफर सर्टिफिकेट"},
+        "description": {
+            "en": "Contact office for TC",
+            "hi": "TC के लिए कार्यालय संपर्क",
+        },
+        "certificate_type": "tc",
+    },
+}
+
 ACTION_REPLIES = {
     "fill_admission_form": {
         "en": (
@@ -654,6 +689,13 @@ def other_service_title_to_id(language):
     return {
         category["title"][language].lower(): category_id
         for category_id, category in OTHER_SERVICE_CATEGORIES.items()
+    }
+
+
+def certificate_title_to_id(language):
+    return {
+        category["title"][language].lower(): category_id
+        for category_id, category in CERTIFICATE_CATEGORIES.items()
     }
 
 
@@ -1150,6 +1192,159 @@ def create_result_pdf(result_data):
     return filename
 
 
+def clean_certificate_value(value, fallback="-"):
+    text = str(value or "").strip()
+    if not text or text.lower() in {"nan", "none", "null"}:
+        return fallback
+    return text
+
+
+def certificate_pdf_lines(student, certificate_type):
+    name = clean_certificate_value(first_present(student, ["name", "student_name"]))
+    father = clean_certificate_value(first_present(student, ["father_name", "fatherName"]))
+    mother = clean_certificate_value(first_present(student, ["mother_name", "motherName"]), "")
+    class_name = clean_certificate_value(first_present(student, ["class_name", "class"]))
+    section = clean_certificate_value(first_present(student, ["section"]), "")
+    session = clean_certificate_value(first_present(student, ["session"]))
+    admission_no = clean_certificate_value(first_present(student, ["admission_no", "admissionNo"]))
+    roll = clean_certificate_value(first_present(student, ["roll", "rollno", "roll_no"]), "")
+    dob = clean_certificate_value(first_present(student, ["dob", "date_of_birth", "dateOfBirth"]), "")
+    address = clean_certificate_value(first_present(student, ["address", "student_address"]), "")
+    class_label = f"{class_name}{' - ' + section if section else ''}"
+    today = datetime.utcnow().strftime("%d/%m/%Y")
+
+    if certificate_type == "bonafide":
+        title = "BONAFIDE CERTIFICATE"
+        body = [
+            f"This is to certify that {name}, child of Mr. {father}"
+            f"{' and Mrs. ' + mother if mother else ''}, is a bona fide student of P.S. Public School.",
+            f"The student is studying in Class {class_label} during the academic session {session}.",
+            f"The admission number of the student is {admission_no}."
+            f"{' The date of birth as per school record is ' + dob + '.' if dob else ''}",
+            f"{'The address recorded in school record is ' + address + '.' if address else ''}",
+            "This certificate is issued on request for official use.",
+        ]
+    elif certificate_type == "character":
+        title = "CHARACTER CERTIFICATE"
+        body = [
+            f"This is to certify that {name}, child of Mr. {father}"
+            f"{' and Mrs. ' + mother if mother else ''}, is/was a student of P.S. Public School.",
+            f"The student is/was enrolled in Class {class_label} during the academic session {session}.",
+            "To the best of our knowledge, the student's conduct, behavior, and character have been satisfactory.",
+            "This certificate is issued on request for official use.",
+        ]
+    elif certificate_type == "study":
+        title = "STUDY CERTIFICATE"
+        body = [
+            f"This is to certify that {name}, child of Mr. {father}"
+            f"{' and Mrs. ' + mother if mother else ''}, is a student of P.S. Public School.",
+            f"The student is studying in Class {class_label} during the academic session {session}.",
+            f"Admission No.: {admission_no}{' | Roll No.: ' + roll if roll else ''}",
+            "This certificate is issued as per school records.",
+        ]
+    else:
+        title = "CERTIFICATE"
+        body = ["Please contact the school office for this certificate."]
+
+    lines = [
+        "P.S. PUBLIC SCHOOL",
+        "Ganaur Road Bhurri (Sonipat)",
+        "",
+        title,
+        "",
+        f"Date: {today}",
+        f"Admission No.: {admission_no}",
+        "",
+    ]
+    lines.extend(body)
+    lines.extend(
+        [
+            "",
+            "Note: This digitally generated certificate is based on school records.",
+            "For signed/stamped copy, please contact the school office.",
+            "",
+            "Authorized Signatory",
+            "P.S. Public School",
+        ]
+    )
+    return lines
+
+
+def create_certificate_pdf(student, certificate_type):
+    admission_no = clean_certificate_value(first_present(student, ["admission_no", "admissionNo"]), "student")
+    safe_admission = re.sub(r"[^A-Za-z0-9_-]", "_", admission_no)
+    safe_type = re.sub(r"[^A-Za-z0-9_-]", "_", certificate_type)
+    filename = f"{safe_type}_certificate_{safe_admission}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.pdf"
+    path = os.path.join(RESULTS_DIR, filename)
+    write_simple_pdf(path, certificate_pdf_lines(student, certificate_type))
+    return filename
+
+
+def send_certificate_flow(to_phone_number, language, student, certificate_id):
+    certificate = CERTIFICATE_CATEGORIES.get(certificate_id)
+    if not certificate:
+        send_text_message(
+            to_phone_number,
+            {
+                "en": "Certificate type not found. Please select again.",
+                "hi": "प्रमाण पत्र प्रकार नहीं मिला। कृपया दोबारा चुनें।",
+            }[language],
+        )
+        return
+
+    certificate_type = certificate["certificate_type"]
+    if certificate_type == "tc":
+        send_text_message(
+            to_phone_number,
+            {
+                "en": (
+                    "Transfer Certificate\n\n"
+                    "For TC, please contact the school office directly. TC requires "
+                    "office verification, fee clearance, and official signature/stamp.\n\n"
+                    "Call: +91 94162 93661\n"
+                    "WhatsApp: +91 94168 38604"
+                ),
+                "hi": (
+                    "ट्रांसफर सर्टिफिकेट\n\n"
+                    "TC के लिए कृपया सीधे स्कूल कार्यालय से संपर्क करें। TC के लिए "
+                    "office verification, fee clearance और official signature/stamp जरूरी है।\n\n"
+                    "फोन: +91 94162 93661\n"
+                    "WhatsApp: +91 94168 38604"
+                ),
+            }[language],
+        )
+        return
+
+    try:
+        filename = create_certificate_pdf(student, certificate_type)
+        certificate_url = build_public_static_url(f"results/{filename}")
+        if not certificate_url:
+            raise RuntimeError("Unable to build public certificate URL.")
+
+        send_text_message(
+            to_phone_number,
+            {
+                "en": f"{certificate['title'][language]} generated successfully. Sending PDF now.",
+                "hi": f"{certificate['title'][language]} generate हो गया है। PDF भेजा जा रहा है।",
+            }[language],
+        )
+        send_document_message(
+            to_phone_number,
+            certificate_url,
+            f"{certificate['title']['en']}.pdf",
+            certificate["title"][language],
+        )
+    except Exception as exc:
+        logger.exception("Failed to generate certificate: %s", exc)
+        send_text_message(
+            to_phone_number,
+            {
+                "en": "Certificate PDF could not be generated right now. Please try again later or contact the office.",
+                "hi": "Certificate PDF अभी generate नहीं हो पाया। कृपया बाद में प्रयास करें या कार्यालय से संपर्क करें।",
+            }[language],
+        )
+
+
 def send_language_buttons(to_phone_number):
     payload = {
         "messaging_product": "whatsapp",
@@ -1319,6 +1514,52 @@ def send_other_services_list_message(to_phone_number, language):
                 "sections": [
                     {
                         "title": {"en": "Support Categories", "hi": "सहायता श्रेणियां"}[language],
+                        "rows": rows,
+                    }
+                ],
+            },
+        },
+    }
+    return send_whatsapp_payload(payload)
+
+
+def send_certificate_list_message(to_phone_number, language):
+    rows = [
+        {
+            "id": certificate_id,
+            "title": certificate["title"][language],
+            "description": certificate["description"][language],
+        }
+        for certificate_id, certificate in CERTIFICATE_CATEGORIES.items()
+    ]
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to_phone_number,
+        "type": "interactive",
+        "interactive": {
+            "type": "list",
+            "header": {
+                "type": "text",
+                "text": {"en": "Certificates", "hi": "प्रमाण पत्र"}[language],
+            },
+            "body": {
+                "text": {
+                    "en": "Please select the certificate you need.",
+                    "hi": "कृपया जिस प्रमाण पत्र की जरूरत है उसे चुनें।",
+                }[language]
+            },
+            "footer": {
+                "text": {
+                    "en": "P.S. Public School",
+                    "hi": "पी.एस. पब्लिक स्कूल",
+                }[language]
+            },
+            "action": {
+                "button": {"en": "View Certificates", "hi": "प्रमाण पत्र देखें"}[language],
+                "sections": [
+                    {
+                        "title": {"en": "Certificate Types", "hi": "प्रमाण पत्र प्रकार"}[language],
                         "rows": rows,
                     }
                 ],
@@ -2047,6 +2288,24 @@ def reply_to_user(to_phone_number, message_text):
         return
 
     other_category_id = other_service_title_to_id(language).get(normalized_text, normalized_text)
+    certificate_id = certificate_title_to_id(language).get(normalized_text, normalized_text)
+
+    if certificate_id in CERTIFICATE_CATEGORIES:
+        auth = STUDENT_AUTH_BY_USER.get(to_phone_number)
+        if not auth or not isinstance(auth.get("student"), dict):
+            start_other_services_login_flow(to_phone_number, language)
+            return
+
+        run_later(
+            0.1,
+            send_certificate_flow,
+            to_phone_number,
+            language,
+            auth["student"],
+            certificate_id,
+        )
+        return
+
     if other_category_id == "student_details":
         auth = STUDENT_AUTH_BY_USER.get(to_phone_number)
         if auth and isinstance(auth.get("student"), dict):
@@ -2088,6 +2347,15 @@ def reply_to_user(to_phone_number, message_text):
                 ),
             }[language],
         )
+        return
+
+    if other_category_id == "certificates":
+        auth = STUDENT_AUTH_BY_USER.get(to_phone_number)
+        if not auth or not isinstance(auth.get("student"), dict):
+            start_other_services_login_flow(to_phone_number, language)
+            return
+
+        send_certificate_list_message(to_phone_number, language)
         return
 
     if other_category_id in OTHER_SERVICE_CATEGORIES:
