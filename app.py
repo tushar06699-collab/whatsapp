@@ -127,19 +127,19 @@ SERVICES = {
         },
     },
     "other_services": {
-        "title": {"en": "Other Services", "hi": "अन्य सेवाएं"},
+        "title": {"en": "Academic Services", "hi": "शैक्षणिक सेवाएं"},
         "description": {
             "en": "Books, uniform, certificates, timing",
             "hi": "किताबें, यूनिफॉर्म, प्रमाण पत्र",
         },
         "reply": {
             "en": (
-                "Other Services\n\n"
+                "Academic Services\n\n"
                 "For books, uniforms, certificates, school timings, or general support, "
                 "please contact the school office."
             ),
             "hi": (
-                "अन्य सेवाएं\n\n"
+                "शैक्षणिक सेवाएं\n\n"
                 "किताबें, यूनिफॉर्म, प्रमाण पत्र, स्कूल समय या सामान्य सहायता के लिए "
                 "कृपया स्कूल कार्यालय से संपर्क करें।"
             ),
@@ -1300,7 +1300,7 @@ def send_other_services_list_message(to_phone_number, language):
             "type": "list",
             "header": {
                 "type": "text",
-                "text": {"en": "Other Services", "hi": "अन्य सेवाएं"}[language],
+        "text": {"en": "Academic Services", "hi": "शैक्षणिक सेवाएं"}[language],
             },
             "body": {
                 "text": {
@@ -1416,13 +1416,13 @@ def start_other_services_login_flow(to_phone_number, language):
         to_phone_number,
         {
             "en": (
-                "Other Services Login\n\n"
-                "For student privacy, please verify once before using Other Services.\n\n"
+                "Academic Services Login\n\n"
+                "For student privacy, please verify once before using Academic Services.\n\n"
                 "Please send the student's admission number."
             ),
             "hi": (
-                "अन्य सेवाएं लॉगिन\n\n"
-                "विद्यार्थी की गोपनीयता के लिए Other Services उपयोग करने से पहले "
+                "शैक्षणिक सेवाएं लॉगिन\n\n"
+                "विद्यार्थी की गोपनीयता के लिए Academic Services उपयोग करने से पहले "
                 "कृपया एक बार verification करें।\n\n"
                 "कृपया विद्यार्थी का admission number भेजें।"
             ),
@@ -1777,11 +1777,26 @@ def process_student_details_login(to_phone_number, username, password, language,
     }
 
     if after_login == "show_other_services":
+        student_name = first_present(result["student"], ["name", "student_name"])
+        admission_no = first_present(result["student"], ["admission_no", "admissionNo"])
+        class_name = first_present(result["student"], ["class_name", "class"])
         send_text_message(
             to_phone_number,
             {
-                "en": "Verification successful. You can now use Other Services without logging in again.",
-                "hi": "Verification सफल रहा। अब आप दोबारा login किए बिना Other Services उपयोग कर सकते हैं।",
+                "en": (
+                    "Verification successful.\n\n"
+                    f"Student: {student_name}\n"
+                    f"Admission No.: {admission_no}\n"
+                    f"Class: {class_name}\n\n"
+                    "You can now use Academic Services without logging in again."
+                ),
+                "hi": (
+                    "Verification सफल रहा।\n\n"
+                    f"विद्यार्थी: {student_name}\n"
+                    f"Admission No.: {admission_no}\n"
+                    f"कक्षा: {class_name}\n\n"
+                    "अब आप दोबारा login किए बिना Academic Services उपयोग कर सकते हैं।"
+                ),
             }[language],
         )
         send_other_services_list_message(to_phone_number, language)

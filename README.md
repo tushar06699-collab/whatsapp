@@ -106,7 +106,7 @@ Admission Enquiry
 Fee Structure
 Transport Facility
 Contact School
-Other Services
+Academic Services
 Change Language
 ```
 
@@ -117,7 +117,7 @@ For Hindi, the same flow is shown in simple Hindi:
 फीस जानकारी
 परिवहन सुविधा
 स्कूल संपर्क
-अन्य सेवाएं
+शैक्षणिक सेवाएं
 भाषा बदलें
 ```
 
@@ -197,9 +197,9 @@ When a user selects `Transport Facility`, the bot sends:
    Sonipat, Ganaur: Rs. 500
    ```
 
-## Other Services Flow
+## Academic Services Flow
 
-When a user selects `Other Services`, the bot opens a second category menu:
+When a user selects `Academic Services`, the bot opens a second category menu:
 
 ```text
 Academic Support
@@ -278,9 +278,9 @@ Subscribe to the WhatsApp `messages` webhook field.
 
 ## Student Details Setup
 
-`Other Services` asks for the student's admission number and DOB once, then saves the verified student for that WhatsApp chat while the app is running. After verification, all Other Services categories can be used without logging in again.
+`Academic Services` asks for the student's admission number and DOB once, then saves the verified student for that WhatsApp chat while the app is running. After verification, all Academic Services categories can be used without logging in again.
 
-The `Other Services -> Student Details` option uses the verified admission number and DOB login, then calls the exam backend login API. If the backend returns `photo_url`, the bot sends the student photo before the text details.
+The `Academic Services -> Student Details` option uses the verified admission number and DOB login, then calls the exam backend login API. If the backend returns `photo_url`, the bot sends the student photo before the text details.
 
 Set this in Render:
 
