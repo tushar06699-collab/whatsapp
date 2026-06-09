@@ -1350,83 +1350,114 @@ def certificate_content(student, certificate_type):
 
 def write_professional_certificate_pdf(path, student, certificate_type):
     content = certificate_content(student, certificate_type)
+    ref_no = f"PSPS/{content['admission_no']}/{datetime.utcnow().strftime('%Y%m%d')}"
     commands = [
         "q",
-        "0.96 0.97 0.99 rg",
-        "35 35 525 772 re f",
+        "1 1 1 rg",
+        "0 0 595 842 re f",
+        "Q",
+        "q",
+        "0.94 0.97 1 rg",
+        "38 38 519 766 re f",
         "Q",
         "q",
         "1 1 1 rg",
-        "45 45 505 752 re f",
+        "50 50 495 742 re f",
         "Q",
         "q",
         "0.05 0.18 0.35 RG",
-        "2 w",
-        "45 45 505 752 re S",
+        "2.2 w",
+        "50 50 495 742 re S",
         "Q",
         "q",
         "0.05 0.18 0.35 RG",
-        "1.2 w",
-        "70 680 m 525 680 l S",
+        "1.4 w",
+        "78 710 54 54 re S",
         "Q",
         "q",
         "0.05 0.18 0.35 RG",
-        "2 w",
-        "82 725 34 34 re S",
+        "78 737 m 105 764 l 132 737 l 105 710 l h S",
         "Q",
         "BT",
         "/F2 18 Tf",
-        "88 745 Td",
+        "94 741 Td",
         f"({pdf_escape('PS')}) Tj",
         "ET",
         "BT",
         "/F1 6 Tf",
-        "80 716 Td",
+        "81 701 Td",
         f"({pdf_escape('PUBLIC SCHOOL')}) Tj",
         "ET",
         "BT",
-        "/F2 26 Tf",
-        "150 747 Td",
+        "/F2 28 Tf",
+        "155 747 Td",
         f"({pdf_escape('P.S. PUBLIC SCHOOL')}) Tj",
         "ET",
         "BT",
         "/F1 12 Tf",
-        "177 725 Td",
+        "193 724 Td",
         f"({pdf_escape('Ganaur Road Bhurri (Sonipat) - 131101')}) Tj",
         "ET",
         "BT",
-        "/F2 15 Tf",
-        "210 645 Td",
-        f"({pdf_escape(content['title'])}) Tj",
+        "/F1 9 Tf",
+        "440 762 Td",
+        f"({pdf_escape('M. No.: 94162 93661')}) Tj",
+        "0 -13 Td",
+        f"({pdf_escape('Email: psbhurri@gmail.com')}) Tj",
         "ET",
         "BT",
+        "/F1 9 Tf",
+        "70 686 Td",
+        f"({pdf_escape('Website: pspublicschool.com')}) Tj",
+        "ET",
+        "q",
+        "0.05 0.18 0.35 RG",
+        "1.4 w",
+        "70 674 m 525 674 l S",
+        "Q",
+        "BT",
+        "/F2 16 Tf",
+        "210 630 Td",
+        f"({pdf_escape(content['title'])}) Tj",
+        "ET",
+        "q",
+        "0.05 0.18 0.35 RG",
+        "1 w",
+        "205 623 m 390 623 l S",
+        "Q",
+        "BT",
         "/F1 11 Tf",
-        "70 610 Td",
+        "78 590 Td",
         f"({pdf_escape('Date: ' + content['date'])}) Tj",
         "0 -20 Td",
         f"({pdf_escape('Admission No.: ' + content['admission_no'])}) Tj",
         "ET",
+        "BT",
+        "/F1 10 Tf",
+        "395 590 Td",
+        f"({pdf_escape('Ref. No.: ' + ref_no)}) Tj",
+        "ET",
     ]
 
-    y = 550
+    y = 525
     for paragraph in content["paragraphs"]:
-        wrapped_lines = wrap_pdf_text(paragraph)
+        wrapped_lines = wrap_pdf_text(paragraph, max_chars=84)
         commands.extend(["BT", "/F1 11 Tf", f"70 {y} Td"])
         first = True
         for line in wrapped_lines:
             if not first:
-                commands.append("0 -17 Td")
-                y -= 17
+                commands.append("0 -18 Td")
+                y -= 18
             commands.append(f"({pdf_escape(line)}) Tj")
             first = False
         commands.append("ET")
-        y -= 34
+        y -= 36
 
     note_lines = [
         "Note: This digitally generated certificate is based on school records.",
         "For signed/stamped hard copy, please contact the school office.",
     ]
-    y = max(y, 225)
+    y = max(y, 260)
     commands.extend(["BT", "/F1 10 Tf", f"70 {y} Td"])
     for index, line in enumerate(note_lines):
         if index:
@@ -1439,19 +1470,26 @@ def write_professional_certificate_pdf(path, student, certificate_type):
             "q",
             "0.05 0.18 0.35 RG",
             "1 w",
-            "365 180 m 505 180 l S",
+            "368 180 m 510 180 l S",
             "Q",
             "BT",
             "/F2 13 Tf",
-            "370 197 Td",
+            "395 197 Td",
             f"({pdf_escape('Naveen Kumar')}) Tj",
             "ET",
             "BT",
             "/F1 10 Tf",
-            "370 165 Td",
+            "410 164 Td",
             f"({pdf_escape('Principal')}) Tj",
             "0 -15 Td",
-            f"({pdf_escape('Digitally signed by Naveen Kumar, Principal')}) Tj",
+            f"({pdf_escape('Digitally signed')}) Tj",
+            "0 -13 Td",
+            f"({pdf_escape('Naveen Kumar, Principal')}) Tj",
+            "ET",
+            "BT",
+            "/F1 8 Tf",
+            "70 88 Td",
+            f"({pdf_escape('This certificate is computer generated and valid for verification with school records.')}) Tj",
             "ET",
         ]
     )
