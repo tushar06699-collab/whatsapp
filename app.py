@@ -3,6 +3,7 @@ import os
 import re
 import threading
 from datetime import datetime
+from urllib.parse import urlencode
 
 import requests
 from dotenv import load_dotenv
@@ -37,6 +38,9 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+RESULTS_DIR = os.path.join(app.static_folder, "results")
+os.makedirs(RESULTS_DIR, exist_ok=True)
 
 # In-memory language preference. For Render's normal single web instance this is enough.
 # For multiple workers/instances, move this to a small database or Redis.
@@ -717,6 +721,402 @@ def send_result_document_message(to_phone_number, document_url, filename, captio
     return send_document_message(to_phone_number, document_url, filename, caption)
 
 
+def build_url(base_url, path, params=None):
+    url = f"{base_url.rstrip('/')}/{path.lstrip('/')}"
+    if params:
+        url = f"{url}?{urlencode(params)}"
+    return url
+
+
+def fetch_json_url(url, timeout=20):
+    response = requests.get(url, timeout=timeout)
+    response.raise_for_status()
+    return response.json()
+
+
+def normalize_roll(value):
+    text = str(value or "").strip()
+    normalized = text.lstrip("0")
+    return normalized or text
+
+
+def is_internal_enabled(exam):
+    return not (
+        exam.get("internal_marks") is False
+        or str(exam.get("internal_marks", "")).strip().lower() in {"no", "false", "0"}
+    )
+
+
+def get_result_status_text(key, language):
+    labels = {
+        "not_eligible": {
+            "en": "You are currently not eligible for result release.",
+            "hi": "आपका result अभी release के लिए eligible नहीं है।",
+        },
+        "not_released": {
+            "en": "Result is not released for your profile yet.",
+            "hi": "आपके profile के लिए result अभी release नहीं हुआ है।",
+        },
+        "roll_not_released": {
+            "en": "Roll number is not released for your profile.",
+            "hi": "आपके profile के लिए roll number release नहीं हुआ है।",
+        },
+        "no_result": {
+            "en": "No published result found for your profile.",
+            "hi": "आपके profile के लिए कोई published result नहीं मिला।",
+        },
+    }
+    return labels[key][language]
+
+
+def fetch_student_results(student, language):
+    exam_base_url = get_exam_backend_base_url()
+    profile = fetch_student_profile(student)
+
+    if profile.get("eligible") is False:
+        return {"ok": True, "status": "not_eligible", "profile": profile, "exams": []}
+
+    if profile.get("release_result") is False:
+        return {"ok": True, "status": "not_released", "profile": profile, "exams": []}
+
+    session = str(profile.get("session") or "").replace("-", "_")
+    class_name = profile.get("class_name") or profile.get("class") or ""
+    roll = str(profile.get("roll") or profile.get("rollno") or "").strip()
+    candidate_rolls = {roll, normalize_roll(roll)}
+    candidate_rolls = {item for item in candidate_rolls if item}
+    student_ids = {
+        str(profile.get("id") or ""),
+        str(student.get("id") or ""),
+        str(student.get("_id") or ""),
+        str(student.get("student_id") or ""),
+    }
+    student_ids = {item for item in student_ids if item}
+
+    if not candidate_rolls:
+        return {"ok": True, "status": "roll_not_released", "profile": profile, "exams": []}
+
+    try:
+        exams_data = fetch_json_url(build_url(exam_base_url, "/exam/list-all"))
+    except requests.RequestException as exc:
+        logger.error("Unable to fetch exam list: %s", exc)
+        return {"ok": False, "reason": "server_error"}
+
+    exams = exams_data.get("exams", []) if isinstance(exams_data, dict) else []
+    result_exams = []
+
+    for exam in exams:
+        exam_name = str(exam.get("exam_name") or "").strip()
+        exam_session = str(exam.get("session") or session).replace("-", "_")
+        if not exam_name or not class_name:
+            continue
+        if session and exam_session and exam_session != session:
+            continue
+
+        try:
+            status_data = fetch_json_url(
+                build_url(
+                    exam_base_url,
+                    "/result/status",
+                    {
+                        "session": exam_session,
+                        "class_name": class_name,
+                        "exam_name": exam_name,
+                    },
+                )
+            )
+        except requests.RequestException:
+            result_exams.append({"exam_name": exam_name, "status": "coming_soon"})
+            continue
+
+        if not status_data.get("success") or not status_data.get("published"):
+            result_exams.append({"exam_name": exam_name, "status": "coming_soon"})
+            continue
+
+        try:
+            marks_data = fetch_json_url(
+                build_url(
+                    exam_base_url,
+                    "/exam/get-marks",
+                    {
+                        "session": exam_session,
+                        "class_name": class_name,
+                        "exam_name": exam_name,
+                    },
+                )
+            )
+        except requests.RequestException:
+            result_exams.append({"exam_name": exam_name, "status": "not_uploaded"})
+            continue
+
+        if not marks_data.get("success"):
+            result_exams.append({"exam_name": exam_name, "status": "not_uploaded"})
+            continue
+
+        marks_by_roll = {}
+        for mark in marks_data.get("marks", []):
+            mark_roll = str(mark.get("roll") or mark.get("student_id") or "").strip()
+            if not mark_roll:
+                continue
+            marks_by_roll.setdefault(mark_roll, {})[str(mark.get("subject") or "")] = mark.get("marks")
+
+        subject_marks = None
+        for candidate in candidate_rolls:
+            if candidate in marks_by_roll:
+                subject_marks = marks_by_roll[candidate]
+                break
+
+        if not subject_marks:
+            result_exams.append({"exam_name": exam_name, "status": "not_uploaded"})
+            continue
+
+        allow_internal = is_internal_enabled(exam)
+        rows = []
+        total = 0
+        total_max = 0
+        failed = False
+
+        for subject, external_value in subject_marks.items():
+            if not subject:
+                continue
+
+            external = int(float(external_value or 0))
+            external_max = int(float(exam.get("total_marks") or 0))
+            internal = 0
+            internal_max = 0
+
+            try:
+                config_data = fetch_json_url(
+                    build_url(
+                        exam_base_url,
+                        "/exam/subject-config/get",
+                        {
+                            "session": exam_session,
+                            "class_name": class_name,
+                            "exam_name": exam_name,
+                            "subject": subject,
+                        },
+                    )
+                )
+                config = config_data.get("config") or {}
+                if config.get("external_max_marks") is not None:
+                    external_max = int(float(config.get("external_max_marks") or 0))
+                if allow_internal and config.get("internal_max_marks") is not None:
+                    internal_max = int(float(config.get("internal_max_marks") or 0))
+            except requests.RequestException:
+                pass
+
+            if allow_internal:
+                try:
+                    internal_data = fetch_json_url(
+                        build_url(
+                            exam_base_url,
+                            "/internal-marks/list",
+                            {
+                                "session": exam_session,
+                                "class_name": class_name,
+                                "subject": subject,
+                                "exam_name": exam_name,
+                            },
+                        )
+                    )
+                    for row in internal_data.get("marks", []):
+                        if str(row.get("student_id") or "") in student_ids:
+                            internal = int(float(row.get("marks") or 0))
+                            break
+                except requests.RequestException:
+                    pass
+
+            subject_total = external + internal
+            subject_max = external_max + internal_max
+            pass_mark = int((subject_max * 0.33) + 0.9999) if subject_max else 0
+            passed = subject_total >= pass_mark
+            failed = failed or not passed
+            total += subject_total
+            total_max += subject_max
+            rows.append(
+                {
+                    "subject": subject,
+                    "external": external,
+                    "external_max": external_max,
+                    "internal": internal,
+                    "internal_max": internal_max,
+                    "total": subject_total,
+                    "total_max": subject_max,
+                    "status": "PASS" if passed else "FAIL",
+                }
+            )
+
+        result_exams.append(
+            {
+                "exam_name": exam_name,
+                "status": "published",
+                "session": exam_session,
+                "allow_internal": allow_internal,
+                "rows": rows,
+                "total": total,
+                "total_max": total_max,
+                "result": "FAIL" if failed else "PASS",
+            }
+        )
+
+    if not result_exams:
+        return {"ok": True, "status": "no_result", "profile": profile, "exams": []}
+
+    return {"ok": True, "status": "ok", "profile": profile, "exams": result_exams}
+
+
+def result_summary_text(result_data, language):
+    profile = result_data.get("profile") or {}
+    if result_data.get("status") != "ok":
+        return get_result_status_text(result_data.get("status", "no_result"), language)
+
+    title = {"en": "Results & Exams", "hi": "रिजल्ट व परीक्षा"}[language]
+    lines = [
+        title,
+        "",
+        f"Name: {profile.get('name', '-')}",
+        f"Class: {profile.get('class_name') or profile.get('class') or '-'} {profile.get('section') or ''}".strip(),
+        f"Roll No.: {profile.get('roll') or profile.get('rollno') or '-'}",
+        f"Session: {profile.get('session') or '-'}",
+        "",
+    ]
+
+    for exam in result_data.get("exams", []):
+        exam_name = exam.get("exam_name", "Exam")
+        status = exam.get("status")
+        if status == "coming_soon":
+            lines.append(f"{exam_name}: Result coming soon.")
+        elif status == "not_uploaded":
+            lines.append(f"{exam_name}: Result not uploaded yet.")
+        elif status == "published":
+            lines.append(
+                f"{exam_name}: {exam.get('result')} | {exam.get('total')}/{exam.get('total_max')}"
+            )
+            for row in exam.get("rows", []):
+                lines.append(
+                    f"- {row['subject']}: {row['total']}/{row['total_max']} ({row['status']})"
+                )
+        lines.append("")
+
+    lines.append("PDF marksheet is being sent separately.")
+    return "\n".join(lines).strip()
+
+
+def pdf_escape(text):
+    return str(text).replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def write_simple_pdf(path, lines):
+    pages = [lines[i : i + 38] for i in range(0, len(lines), 38)] or [["No result data"]]
+    objects = []
+    page_ids = []
+    content_ids = []
+
+    def add_object(body):
+        objects.append(body)
+        return len(objects)
+
+    catalog_id = add_object("<< /Type /Catalog /Pages 2 0 R >>")
+    pages_id = add_object("")
+    font_id = add_object("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+
+    for page_lines in pages:
+        y = 790
+        commands = ["BT", "/F1 10 Tf", "50 790 Td"]
+        first = True
+        for line in page_lines:
+            if first:
+                commands.append(f"({pdf_escape(line)}) Tj")
+                first = False
+            else:
+                commands.append("0 -18 Td")
+                commands.append(f"({pdf_escape(line)}) Tj")
+            y -= 18
+        commands.append("ET")
+        stream = "\n".join(commands)
+        content_id = add_object(
+            f"<< /Length {len(stream.encode('latin-1', errors='replace'))} >>\n"
+            f"stream\n{stream}\nendstream"
+        )
+        page_id = add_object(
+            f"<< /Type /Page /Parent {pages_id} 0 R /MediaBox [0 0 595 842] "
+            f"/Resources << /Font << /F1 {font_id} 0 R >> >> "
+            f"/Contents {content_id} 0 R >>"
+        )
+        content_ids.append(content_id)
+        page_ids.append(page_id)
+
+    objects[pages_id - 1] = (
+        f"<< /Type /Pages /Kids [{' '.join(f'{pid} 0 R' for pid in page_ids)}] "
+        f"/Count {len(page_ids)} >>"
+    )
+
+    pdf_parts = ["%PDF-1.4\n"]
+    offsets = [0]
+    for index, body in enumerate(objects, start=1):
+        offsets.append(sum(len(part.encode("latin-1", errors="replace")) for part in pdf_parts))
+        pdf_parts.append(f"{index} 0 obj\n{body}\nendobj\n")
+
+    xref_offset = sum(len(part.encode("latin-1", errors="replace")) for part in pdf_parts)
+    pdf_parts.append(f"xref\n0 {len(objects) + 1}\n")
+    pdf_parts.append("0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        pdf_parts.append(f"{offset:010d} 00000 n \n")
+    pdf_parts.append(
+        f"trailer\n<< /Size {len(objects) + 1} /Root {catalog_id} 0 R >>\n"
+        f"startxref\n{xref_offset}\n%%EOF\n"
+    )
+
+    with open(path, "wb") as pdf_file:
+        pdf_file.write("".join(pdf_parts).encode("latin-1", errors="replace"))
+
+
+def result_pdf_lines(result_data):
+    profile = result_data.get("profile") or {}
+    lines = [
+        "P.S. Public School",
+        "Student Result / Marksheet",
+        "",
+        f"Name: {profile.get('name', '-')}",
+        f"Admission No.: {profile.get('admission_no', '-')}",
+        f"Class: {profile.get('class_name') or profile.get('class') or '-'} {profile.get('section') or ''}".strip(),
+        f"Roll No.: {profile.get('roll') or profile.get('rollno') or '-'}",
+        f"Session: {profile.get('session') or '-'}",
+        f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
+        "",
+    ]
+
+    if result_data.get("status") != "ok":
+        lines.append(get_result_status_text(result_data.get("status", "no_result"), "en"))
+        return lines
+
+    for exam in result_data.get("exams", []):
+        lines.append(f"Exam: {exam.get('exam_name', 'Exam')}")
+        if exam.get("status") != "published":
+            lines.append(f"Status: {exam.get('status', 'pending').replace('_', ' ').title()}")
+            lines.append("")
+            continue
+        lines.append("Subject | Ext | Int | Total | Status")
+        for row in exam.get("rows", []):
+            lines.append(
+                f"{row['subject']} | {row['external']}/{row['external_max']} | "
+                f"{row['internal']}/{row['internal_max']} | "
+                f"{row['total']}/{row['total_max']} | {row['status']}"
+            )
+        lines.append(f"Result: {exam.get('result')} | {exam.get('total')}/{exam.get('total_max')}")
+        lines.append("")
+    return lines
+
+
+def create_result_pdf(result_data):
+    profile = result_data.get("profile") or {}
+    safe_admission = re.sub(r"[^A-Za-z0-9_-]", "_", str(profile.get("admission_no") or "student"))
+    filename = f"result_{safe_admission}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.pdf"
+    path = os.path.join(RESULTS_DIR, filename)
+    write_simple_pdf(path, result_pdf_lines(result_data))
+    return filename
+
+
 def send_language_buttons(to_phone_number):
     payload = {
         "messaging_product": "whatsapp",
@@ -1316,6 +1716,10 @@ def process_student_details_login(to_phone_number, username, password, language,
         send_other_services_list_message(to_phone_number, language)
         return
 
+    if after_login == "show_results_exams":
+        send_results_exams_flow(to_phone_number, language, result["student"])
+        return
+
     try:
         details_message = format_student_details(result["student"], language)
     except Exception as exc:
@@ -1324,6 +1728,51 @@ def process_student_details_login(to_phone_number, username, password, language,
         return
 
     send_text_message(to_phone_number, details_message)
+
+
+def send_results_exams_flow(to_phone_number, language, student):
+    try:
+        result_data = fetch_student_results(student, language)
+    except Exception as exc:
+        logger.exception("Failed to fetch student result: %s", exc)
+        send_text_message(to_phone_number, STUDENT_LOGIN_TEXT["server_error"][language])
+        return
+
+    if not result_data.get("ok"):
+        send_text_message(
+            to_phone_number,
+            STUDENT_LOGIN_TEXT[result_data.get("reason", "server_error")][language],
+        )
+        return
+
+    send_text_message(to_phone_number, result_summary_text(result_data, language))
+
+    try:
+        pdf_filename = create_result_pdf(result_data)
+        pdf_url = url_for(
+            "static",
+            filename=f"results/{pdf_filename}",
+            _external=True,
+            _scheme="https",
+        )
+        send_result_document_message(
+            to_phone_number,
+            pdf_url,
+            "P.S. Public School Result.pdf",
+            {
+                "en": "Result PDF - P.S. Public School",
+                "hi": "Result PDF - पी.एस. पब्लिक स्कूल",
+            }[language],
+        )
+    except Exception as exc:
+        logger.exception("Failed to create/send result PDF: %s", exc)
+        send_text_message(
+            to_phone_number,
+            {
+                "en": "Text result has been sent, but the PDF could not be generated right now.",
+                "hi": "Text result भेज दिया गया है, लेकिन PDF अभी generate नहीं हो पाया।",
+            }[language],
+        )
 
 
 def set_language_and_start(to_phone_number, language):
@@ -1396,6 +1845,40 @@ def reply_to_user(to_phone_number, message_text):
             return
 
         start_student_details_flow(to_phone_number, language)
+        return
+
+    if other_category_id == "results_exams":
+        auth = STUDENT_AUTH_BY_USER.get(to_phone_number)
+        if auth and isinstance(auth.get("student"), dict):
+            run_later(
+                0.1,
+                send_results_exams_flow,
+                to_phone_number,
+                language,
+                auth["student"],
+            )
+            return
+
+        STUDENT_DETAIL_SESSIONS[to_phone_number] = {
+            "step": "awaiting_username",
+            "language": language,
+            "after_login": "show_results_exams",
+        }
+        send_text_message(
+            to_phone_number,
+            {
+                "en": (
+                    "Results & Exams Login\n\n"
+                    "Please verify once to view result details.\n\n"
+                    "Please send the student's admission number."
+                ),
+                "hi": (
+                    "रिजल्ट व परीक्षा लॉगिन\n\n"
+                    "Result details देखने के लिए कृपया एक बार verification करें।\n\n"
+                    "कृपया विद्यार्थी का admission number भेजें।"
+                ),
+            }[language],
+        )
         return
 
     if other_category_id in OTHER_SERVICE_CATEGORIES:

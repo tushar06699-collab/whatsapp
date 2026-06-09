@@ -210,6 +210,15 @@ Uniform & Books
 School Timing
 ```
 
+`Results & Exams` uses the verified student session to fetch published results from the exam backend. The bot sends:
+
+```text
+1. Text result summary
+2. PDF marksheet document
+```
+
+If the student is not already verified, the bot first asks for admission number and DOB.
+
 In Hindi:
 
 ```text
