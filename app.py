@@ -1685,6 +1685,38 @@ def format_student_details(student, language):
     return "\n".join(lines)
 
 
+def get_student_photo_url(student):
+    photo_url = str(student.get("photo_url") or "").strip()
+    if not photo_url:
+        return ""
+
+    if photo_url.startswith("http://") or photo_url.startswith("https://"):
+        return photo_url
+
+    student_backend_url = (STUDENT_BACKEND_URL or DEFAULT_STUDENT_BACKEND_URL).rstrip("/")
+    if photo_url.startswith("/"):
+        return f"{student_backend_url}{photo_url}"
+
+    return f"{student_backend_url}/{photo_url}"
+
+
+def send_student_photo_if_available(to_phone_number, student, language):
+    photo_url = get_student_photo_url(student)
+    if not photo_url:
+        return False
+
+    caption = {
+        "en": f"Student Photo - {first_present(student, ['name', 'student_name'])}",
+        "hi": f"विद्यार्थी फोटो - {first_present(student, ['name', 'student_name'])}",
+    }[language]
+    return send_image_message(to_phone_number, photo_url, caption)
+
+
+def send_student_details_response(to_phone_number, student, language):
+    send_student_photo_if_available(to_phone_number, student, language)
+    send_text_message(to_phone_number, format_student_details(student, language))
+
+
 def handle_student_details_session(to_phone_number, message_text):
     session = STUDENT_DETAIL_SESSIONS.get(to_phone_number)
     if not session:
@@ -1766,7 +1798,8 @@ def process_student_details_login(to_phone_number, username, password, language,
         send_text_message(to_phone_number, STUDENT_LOGIN_TEXT["server_error"][language])
         return
 
-    send_text_message(to_phone_number, details_message)
+        send_student_photo_if_available(to_phone_number, result["student"], language)
+        send_text_message(to_phone_number, details_message)
 
 
 def send_results_exams_flow(to_phone_number, language, student):
@@ -1874,10 +1907,7 @@ def reply_to_user(to_phone_number, message_text):
     if other_category_id == "student_details":
         auth = STUDENT_AUTH_BY_USER.get(to_phone_number)
         if auth and isinstance(auth.get("student"), dict):
-            send_text_message(
-                to_phone_number,
-                format_student_details(auth["student"], language),
-            )
+            send_student_details_response(to_phone_number, auth["student"], language)
             return
 
         start_student_details_flow(to_phone_number, language)

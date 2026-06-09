@@ -280,7 +280,7 @@ Subscribe to the WhatsApp `messages` webhook field.
 
 `Other Services` asks for the student's admission number and DOB once, then saves the verified student for that WhatsApp chat while the app is running. After verification, all Other Services categories can be used without logging in again.
 
-The `Other Services -> Student Details` option uses the verified admission number and DOB login, then calls the exam backend login API.
+The `Other Services -> Student Details` option uses the verified admission number and DOB login, then calls the exam backend login API. If the backend returns `photo_url`, the bot sends the student photo before the text details.
 
 Set this in Render:
 
