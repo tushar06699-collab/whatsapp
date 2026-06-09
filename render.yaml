@@ -22,3 +22,5 @@ services:
         value: https://pspublicschool.com
       - key: EXAM_BACKEND_STUDENT_LOGIN_URL
         sync: false
+      - key: STUDENT_BACKEND_URL
+        value: https://student-backend-117372286918.asia-south1.run.app

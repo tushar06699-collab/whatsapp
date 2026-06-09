@@ -24,10 +24,12 @@ ONLINE_ADMISSION_FORM_URL = os.getenv(
 DEFAULT_EXAM_BACKEND_STUDENT_LOGIN_URL = (
     "https://exam-backend-117372286918.asia-south1.run.app/login"
 )
+DEFAULT_STUDENT_BACKEND_URL = "https://student-backend-117372286918.asia-south1.run.app"
 EXAM_BACKEND_STUDENT_LOGIN_URL = os.getenv(
     "EXAM_BACKEND_STUDENT_LOGIN_URL",
     DEFAULT_EXAM_BACKEND_STUDENT_LOGIN_URL,
 ).strip()
+STUDENT_BACKEND_URL = os.getenv("STUDENT_BACKEND_URL", DEFAULT_STUDENT_BACKEND_URL).strip()
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
@@ -1032,10 +1034,43 @@ def fetch_student_profile(student):
     return student
 
 
+def fetch_student_details_from_student_backend(username, password):
+    admission_no = str(username or "").strip()
+    dob = normalize_dob_for_exam_login(password)
+    student_backend_url = (STUDENT_BACKEND_URL or DEFAULT_STUDENT_BACKEND_URL).rstrip("/")
+
+    try:
+        response = requests.get(f"{student_backend_url}/students", timeout=20)
+        response.raise_for_status()
+        data = response.json()
+    except requests.RequestException as exc:
+        logger.error("Student backend fallback request failed: %s", exc)
+        return {"ok": False, "reason": "server_error"}
+    except ValueError:
+        logger.error("Student backend fallback returned non-JSON response.")
+        return {"ok": False, "reason": "server_error"}
+
+    students = data.get("students") if isinstance(data, dict) else data
+    if not isinstance(students, list):
+        logger.error("Student backend fallback returned unexpected payload: %s", data)
+        return {"ok": False, "reason": "server_error"}
+
+    for student in students:
+        if not isinstance(student, dict):
+            continue
+
+        saved_admission_no = str(student.get("admission_no", "")).strip()
+        saved_dob = str(student.get("dob", "")).strip()
+        if saved_admission_no == admission_no and saved_dob == dob:
+            return {"ok": True, "student": student}
+
+    return {"ok": False, "reason": "login_failed"}
+
+
 def fetch_student_details(username, password):
     student_login_url = get_student_login_url()
     if not student_login_url:
-        return {"ok": False, "reason": "missing_url"}
+        return fetch_student_details_from_student_backend(username, password)
 
     payload = {
         "username": str(username or "").strip(),
@@ -1049,11 +1084,11 @@ def fetch_student_details(username, password):
         )
     except requests.RequestException as exc:
         logger.error("Student login request failed: %s", exc)
-        return {"ok": False, "reason": "server_error"}
+        return fetch_student_details_from_student_backend(username, password)
 
     if response.status_code in {401, 403, 404}:
         logger.warning("Student login failed: %s", response.text)
-        return {"ok": False, "reason": "login_failed"}
+        return fetch_student_details_from_student_backend(username, password)
 
     if not response.ok:
         logger.error(
@@ -1061,17 +1096,17 @@ def fetch_student_details(username, password):
             response.status_code,
             response.text,
         )
-        return {"ok": False, "reason": "server_error"}
+        return fetch_student_details_from_student_backend(username, password)
 
     try:
         data = response.json()
     except ValueError:
         logger.error("Student login backend returned non-JSON response.")
-        return {"ok": False, "reason": "server_error"}
+        return fetch_student_details_from_student_backend(username, password)
 
     if data.get("success") is False or data.get("error"):
         logger.warning("Student login backend rejected credentials: %s", data)
-        return {"ok": False, "reason": "login_failed"}
+        return fetch_student_details_from_student_backend(username, password)
 
     if data.get("role") and data.get("role") != "student":
         logger.warning("Student details login returned non-student role: %s", data.get("role"))
@@ -1327,6 +1362,7 @@ def debug_config():
             "admission_form_pdf_url_configured": bool(ADMISSION_FORM_PDF_URL),
             "exam_backend_student_login_url": EXAM_BACKEND_STUDENT_LOGIN_URL,
             "effective_student_login_url": get_student_login_url(),
+            "student_backend_url": STUDENT_BACKEND_URL,
             "service_menu_delay_seconds": SERVICE_MENU_DELAY_SECONDS,
         }
     )
