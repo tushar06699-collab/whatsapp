@@ -619,6 +619,14 @@ STUDENT_LOGIN_TEXT = {
             "अभी विद्यार्थी विवरण प्राप्त नहीं हो पाया। कृपया बाद में प्रयास करें या स्कूल कार्यालय से संपर्क करें।"
         ),
     },
+    "result_error": {
+        "en": (
+            "Result could not be fetched right now. Please try again later or contact the school office."
+        ),
+        "hi": (
+            "अभी result प्राप्त नहीं हो पाया। कृपया बाद में प्रयास करें या स्कूल कार्यालय से संपर्क करें।"
+        ),
+    },
     "not_student": {
         "en": (
             "This login was verified, but it is not a student login. Please use the student's admission number and DOB."
@@ -799,7 +807,7 @@ def fetch_student_results(student, language):
         exams_data = fetch_json_url(build_url(exam_base_url, "/exam/list-all"))
     except requests.RequestException as exc:
         logger.error("Unable to fetch exam list: %s", exc)
-        return {"ok": False, "reason": "server_error"}
+        return {"ok": False, "reason": "result_error"}
 
     exams = exams_data.get("exams", []) if isinstance(exams_data, dict) else []
     result_exams = []
@@ -968,7 +976,14 @@ def fetch_student_results(student, language):
 def result_summary_text(result_data, language):
     profile = result_data.get("profile") or {}
     if result_data.get("status") != "ok":
-        return get_result_status_text(result_data.get("status", "no_result"), language)
+        return (
+            f"{ {'en': 'Results & Exams', 'hi': 'रिजल्ट व परीक्षा'}[language] }\n\n"
+            f"Name: {profile.get('name', '-')}\n"
+            f"Class: {profile.get('class_name') or profile.get('class') or '-'} {profile.get('section') or ''}\n"
+            f"Roll No.: {profile.get('roll') or profile.get('rollno') or '-'}\n"
+            f"Session: {profile.get('session') or '-'}\n\n"
+            f"{get_result_status_text(result_data.get('status', 'no_result'), language)}"
+        )
 
     title = {"en": "Results & Exams", "hi": "रिजल्ट व परीक्षा"}[language]
     lines = [
@@ -1460,6 +1475,12 @@ def fetch_student_profile(student):
     if isinstance(profile, dict):
         merged = dict(student)
         merged.update(profile)
+        if not merged.get("roll") and student.get("rollno"):
+            merged["roll"] = student.get("rollno")
+        if not merged.get("rollno") and merged.get("roll"):
+            merged["rollno"] = merged.get("roll")
+        if not merged.get("class_name") and student.get("class"):
+            merged["class_name"] = student.get("class")
         return merged
 
     return student
@@ -1735,7 +1756,7 @@ def send_results_exams_flow(to_phone_number, language, student):
         result_data = fetch_student_results(student, language)
     except Exception as exc:
         logger.exception("Failed to fetch student result: %s", exc)
-        send_text_message(to_phone_number, STUDENT_LOGIN_TEXT["server_error"][language])
+        send_text_message(to_phone_number, STUDENT_LOGIN_TEXT["result_error"][language])
         return
 
     if not result_data.get("ok"):
