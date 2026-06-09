@@ -639,7 +639,11 @@ def other_service_title_to_id(language):
 
 def send_whatsapp_payload(payload):
     if not ACCESS_TOKEN or not PHONE_NUMBER_ID:
-        logger.error("ACCESS_TOKEN and PHONE_NUMBER_ID must be set.")
+        logger.error(
+            "WhatsApp send skipped. ACCESS_TOKEN configured=%s PHONE_NUMBER_ID configured=%s",
+            bool(ACCESS_TOKEN),
+            bool(PHONE_NUMBER_ID),
+        )
         return False
 
     url = f"https://graph.facebook.com/{GRAPH_API_VERSION}/{PHONE_NUMBER_ID}/messages"
@@ -653,7 +657,13 @@ def send_whatsapp_payload(payload):
         response.raise_for_status()
     except requests.RequestException as exc:
         response_text = getattr(exc.response, "text", "")
-        logger.error("Failed to send WhatsApp message: %s %s", exc, response_text)
+        logger.error(
+            "Failed to send WhatsApp message. type=%s to=%s error=%s response=%s",
+            payload.get("type"),
+            payload.get("to"),
+            exc,
+            response_text,
+        )
         return False
 
     return True
@@ -769,6 +779,17 @@ def run_later(delay_seconds, callback, *args):
     timer.daemon = True
     timer.start()
     return timer
+
+
+def safe_reply_to_user(to_phone_number, message_text):
+    try:
+        reply_to_user(to_phone_number, message_text)
+    except Exception as exc:
+        logger.exception("Unexpected reply error for %s: %s", to_phone_number, exc)
+        send_text_message(
+            to_phone_number,
+            "Sorry, something went wrong. Please send hi to restart.",
+        )
 
 
 def send_service_list_message(to_phone_number, language):
@@ -1269,6 +1290,23 @@ def health_check():
     return jsonify({"status": "ok", "service": "whatsapp-auto-reply-bot"})
 
 
+@app.get("/debug")
+def debug_config():
+    return jsonify(
+        {
+            "status": "ok",
+            "access_token_configured": bool(ACCESS_TOKEN),
+            "phone_number_id_configured": bool(PHONE_NUMBER_ID),
+            "phone_number_id": PHONE_NUMBER_ID or "",
+            "graph_api_version": GRAPH_API_VERSION,
+            "school_image_url_configured": bool(SCHOOL_IMAGE_URL),
+            "admission_form_pdf_url_configured": bool(ADMISSION_FORM_PDF_URL),
+            "exam_backend_student_login_url": EXAM_BACKEND_STUDENT_LOGIN_URL,
+            "service_menu_delay_seconds": SERVICE_MENU_DELAY_SECONDS,
+        }
+    )
+
+
 @app.get("/webhook")
 def verify_webhook():
     mode = request.args.get("hub.mode")
@@ -1285,34 +1323,37 @@ def verify_webhook():
 
 @app.post("/webhook")
 def receive_webhook():
-    data = request.get_json(silent=True) or {}
-    logger.info("Incoming webhook received.")
+    try:
+        data = request.get_json(silent=True) or {}
+        logger.info("Incoming webhook received.")
 
-    for entry in data.get("entry", []):
-        for change in entry.get("changes", []):
-            value = change.get("value", {})
-            messages = value.get("messages", [])
+        for entry in data.get("entry", []):
+            for change in entry.get("changes", []):
+                value = change.get("value", {})
+                messages = value.get("messages", [])
 
-            for message in messages:
-                sender = message.get("from")
-                message_type = message.get("type")
+                for message in messages:
+                    sender = message.get("from")
+                    message_type = message.get("type")
 
-                if not sender:
-                    continue
+                    if not sender:
+                        continue
 
-                incoming_text = ""
-                if message_type == "text":
-                    incoming_text = message.get("text", {}).get("body", "")
-                elif message_type == "interactive":
-                    interactive = message.get("interactive", {})
-                    if interactive.get("type") == "list_reply":
-                        list_reply = interactive.get("list_reply", {})
-                        incoming_text = list_reply.get("id") or list_reply.get("title", "")
-                    elif interactive.get("type") == "button_reply":
-                        button_reply = interactive.get("button_reply", {})
-                        incoming_text = button_reply.get("id") or button_reply.get("title", "")
+                    incoming_text = ""
+                    if message_type == "text":
+                        incoming_text = message.get("text", {}).get("body", "")
+                    elif message_type == "interactive":
+                        interactive = message.get("interactive", {})
+                        if interactive.get("type") == "list_reply":
+                            list_reply = interactive.get("list_reply", {})
+                            incoming_text = list_reply.get("id") or list_reply.get("title", "")
+                        elif interactive.get("type") == "button_reply":
+                            button_reply = interactive.get("button_reply", {})
+                            incoming_text = button_reply.get("id") or button_reply.get("title", "")
 
-                reply_to_user(sender, incoming_text)
+                    safe_reply_to_user(sender, incoming_text)
+    except Exception as exc:
+        logger.exception("Webhook processing error: %s", exc)
 
     return jsonify({"status": "received"}), 200
 
