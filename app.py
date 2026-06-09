@@ -21,9 +21,12 @@ ONLINE_ADMISSION_FORM_URL = os.getenv(
     "ONLINE_ADMISSION_FORM_URL",
     "https://pspublicschool.com",
 ).strip()
+DEFAULT_EXAM_BACKEND_STUDENT_LOGIN_URL = (
+    "https://exam-backend-117372286918.asia-south1.run.app/login"
+)
 EXAM_BACKEND_STUDENT_LOGIN_URL = os.getenv(
     "EXAM_BACKEND_STUDENT_LOGIN_URL",
-    "https://exam-backend-117372286918.asia-south1.run.app/login",
+    DEFAULT_EXAM_BACKEND_STUDENT_LOGIN_URL,
 ).strip()
 
 app = Flask(__name__)
@@ -971,11 +974,31 @@ def normalize_dob_for_exam_login(raw_password):
     return normalized
 
 
-def get_exam_backend_base_url():
-    if "/login" in EXAM_BACKEND_STUDENT_LOGIN_URL:
-        return EXAM_BACKEND_STUDENT_LOGIN_URL.rsplit("/login", 1)[0].rstrip("/")
+def get_student_login_url():
+    configured_url = (EXAM_BACKEND_STUDENT_LOGIN_URL or "").strip()
+    if not configured_url:
+        return DEFAULT_EXAM_BACKEND_STUDENT_LOGIN_URL
 
-    return EXAM_BACKEND_STUDENT_LOGIN_URL.rstrip("/")
+    bad_placeholders = {
+        "YOUR-EXAM-BACKEND",
+        "student-login-api",
+    }
+    if any(marker in configured_url for marker in bad_placeholders):
+        logger.warning(
+            "Ignoring invalid EXAM_BACKEND_STUDENT_LOGIN_URL=%s; using default /login endpoint.",
+            configured_url,
+        )
+        return DEFAULT_EXAM_BACKEND_STUDENT_LOGIN_URL
+
+    return configured_url
+
+
+def get_exam_backend_base_url():
+    student_login_url = get_student_login_url()
+    if "/login" in student_login_url:
+        return student_login_url.rsplit("/login", 1)[0].rstrip("/")
+
+    return student_login_url.rstrip("/")
 
 
 def fetch_student_profile(student):
@@ -1010,7 +1033,8 @@ def fetch_student_profile(student):
 
 
 def fetch_student_details(username, password):
-    if not EXAM_BACKEND_STUDENT_LOGIN_URL:
+    student_login_url = get_student_login_url()
+    if not student_login_url:
         return {"ok": False, "reason": "missing_url"}
 
     payload = {
@@ -1019,7 +1043,7 @@ def fetch_student_details(username, password):
     }
     try:
         response = requests.post(
-            EXAM_BACKEND_STUDENT_LOGIN_URL,
+            student_login_url,
             json=payload,
             timeout=15,
         )
@@ -1302,6 +1326,7 @@ def debug_config():
             "school_image_url_configured": bool(SCHOOL_IMAGE_URL),
             "admission_form_pdf_url_configured": bool(ADMISSION_FORM_PDF_URL),
             "exam_backend_student_login_url": EXAM_BACKEND_STUDENT_LOGIN_URL,
+            "effective_student_login_url": get_student_login_url(),
             "service_menu_delay_seconds": SERVICE_MENU_DELAY_SECONDS,
         }
     )
