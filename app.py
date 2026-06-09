@@ -577,12 +577,12 @@ STUDENT_LOGIN_TEXT = {
     "ask_password": {
         "en": (
             "Now please send the student's DOB exactly as saved in the exam portal.\n\n"
-            "You can send it as DD/MM/YYYY or DDMMYYYY.\n\n"
+            "You can send it as DD/MM/YYYY, MM/DD/YYYY, DD-MM-YYYY, MM-DD-YYYY, or DDMMYYYY.\n\n"
             "For privacy, this is used only for login verification and is not stored."
         ),
         "hi": (
             "अब कृपया विद्यार्थी की DOB भेजें, बिल्कुल वैसे ही जैसे exam portal में saved है।\n\n"
-            "आप DOB को DD/MM/YYYY या DDMMYYYY format में भेज सकते हैं।\n\n"
+            "आप DOB को DD/MM/YYYY, MM/DD/YYYY, DD-MM-YYYY, MM-DD-YYYY या DDMMYYYY format में भेज सकते हैं।\n\n"
             "गोपनीयता के लिए यह केवल login verification के लिए उपयोग होगा, store नहीं किया जाएगा।"
         ),
     },
@@ -1440,6 +1440,54 @@ def normalize_dob_for_exam_login(raw_password):
     return normalized
 
 
+def dob_candidate_values(raw_dob):
+    value = str(raw_dob or "").strip()
+    if not value:
+        return []
+
+    candidates = {value, value.replace("-", "/").replace(".", "/")}
+    digits = re.sub(r"\D", "", value)
+
+    if len(digits) == 8:
+        first = digits[0:2]
+        second = digits[2:4]
+        year = digits[4:8]
+        candidates.update(
+            {
+                f"{first}/{second}/{year}",
+                f"{second}/{first}/{year}",
+                f"{first}-{second}-{year}",
+                f"{second}-{first}-{year}",
+            }
+        )
+
+    for separator in ("/", "-"):
+        parts = value.replace(".", separator).replace("/", separator).replace("-", separator).split(separator)
+        if len(parts) == 3:
+            first, second, year = [part.strip() for part in parts]
+            if first.isdigit() and second.isdigit() and year.isdigit():
+                first = first.zfill(2)
+                second = second.zfill(2)
+                if len(year) == 2:
+                    year = f"20{year}" if int(year) <= 40 else f"19{year}"
+                candidates.update(
+                    {
+                        f"{first}/{second}/{year}",
+                        f"{second}/{first}/{year}",
+                        f"{first}-{second}-{year}",
+                        f"{second}-{first}-{year}",
+                    }
+                )
+
+    return list(candidates)
+
+
+def dob_match(user_dob, saved_dob):
+    user_candidates = {item.lower() for item in dob_candidate_values(user_dob)}
+    saved_candidates = {item.lower() for item in dob_candidate_values(saved_dob)}
+    return bool(user_candidates & saved_candidates)
+
+
 def get_student_login_url():
     configured_url = (EXAM_BACKEND_STUDENT_LOGIN_URL or "").strip()
     if not configured_url:
@@ -1506,7 +1554,6 @@ def fetch_student_profile(student):
 
 def fetch_student_details_from_student_backend(username, password):
     admission_no = str(username or "").strip()
-    dob = normalize_dob_for_exam_login(password)
     student_backend_url = (STUDENT_BACKEND_URL or DEFAULT_STUDENT_BACKEND_URL).rstrip("/")
 
     try:
@@ -1531,7 +1578,7 @@ def fetch_student_details_from_student_backend(username, password):
 
         saved_admission_no = str(student.get("admission_no", "")).strip()
         saved_dob = str(student.get("dob", "")).strip()
-        if saved_admission_no == admission_no and saved_dob == dob:
+        if saved_admission_no == admission_no and dob_match(password, saved_dob):
             return {"ok": True, "student": student}
 
     return {"ok": False, "reason": "login_failed"}
@@ -1542,22 +1589,28 @@ def fetch_student_details(username, password):
     if not student_login_url:
         return fetch_student_details_from_student_backend(username, password)
 
-    payload = {
-        "username": str(username or "").strip(),
-        "password": normalize_dob_for_exam_login(password),
-    }
-    try:
-        response = requests.post(
-            student_login_url,
-            json=payload,
-            timeout=15,
-        )
-    except requests.RequestException as exc:
-        logger.error("Student login request failed: %s", exc)
-        return fetch_student_details_from_student_backend(username, password)
+    response = None
+    for dob_value in dob_candidate_values(password):
+        payload = {
+            "username": str(username or "").strip(),
+            "password": dob_value,
+        }
+        try:
+            response = requests.post(
+                student_login_url,
+                json=payload,
+                timeout=15,
+            )
+        except requests.RequestException as exc:
+            logger.error("Student login request failed: %s", exc)
+            return fetch_student_details_from_student_backend(username, password)
 
-    if response.status_code in {401, 403, 404}:
-        logger.warning("Student login failed: %s", response.text)
+        if response.status_code not in {401, 403, 404}:
+            break
+
+        logger.warning("Student login failed for DOB variant %s: %s", dob_value, response.text)
+
+    if response is None or response.status_code in {401, 403, 404}:
         return fetch_student_details_from_student_backend(username, password)
 
     if not response.ok:
