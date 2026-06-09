@@ -228,7 +228,7 @@ Study Certificate
 Transfer Certificate
 ```
 
-Bonafide, Character, and Study certificates are generated as PDF from the verified student record. Transfer Certificate shows office contact instructions because TC requires official office verification and signature/stamp.
+Bonafide, Character, and Study certificates are generated as professional letterhead-style PDFs from the verified student record. PDFs include a school header, simple school logo mark, bold school name, certificate title, and digitally signed principal block: `Naveen Kumar, Principal`. Transfer Certificate shows office contact instructions because TC requires official office verification and signature/stamp.
 
 In Hindi:
 

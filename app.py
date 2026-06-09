@@ -1270,13 +1270,233 @@ def certificate_pdf_lines(student, certificate_type):
     return lines
 
 
+def wrap_pdf_text(text, max_chars=92):
+    words = str(text).split()
+    lines = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if len(candidate) > max_chars and current:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return lines
+
+
+def certificate_content(student, certificate_type):
+    name = clean_certificate_value(first_present(student, ["name", "student_name"]))
+    father = clean_certificate_value(first_present(student, ["father_name", "fatherName"]))
+    mother = clean_certificate_value(first_present(student, ["mother_name", "motherName"]), "")
+    class_name = clean_certificate_value(first_present(student, ["class_name", "class"]))
+    section = clean_certificate_value(first_present(student, ["section"]), "")
+    session = clean_certificate_value(first_present(student, ["session"]))
+    admission_no = clean_certificate_value(first_present(student, ["admission_no", "admissionNo"]))
+    roll = clean_certificate_value(first_present(student, ["roll", "rollno", "roll_no"]), "")
+    dob = clean_certificate_value(first_present(student, ["dob", "date_of_birth", "dateOfBirth"]), "")
+    address = clean_certificate_value(first_present(student, ["address", "student_address"]), "")
+    class_label = f"{class_name}{' - ' + section if section else ''}"
+
+    if certificate_type == "bonafide":
+        title = "BONAFIDE CERTIFICATE"
+        paragraphs = [
+            (
+                f"This is to certify that {name}, child of Mr. {father}"
+                f"{' and Mrs. ' + mother if mother else ''}, is a bona fide student of P.S. Public School."
+            ),
+            f"The student is studying in Class {class_label} during the academic session {session}.",
+            (
+                f"The admission number of the student is {admission_no}."
+                f"{' The date of birth as per school record is ' + dob + '.' if dob else ''}"
+            ),
+            f"{'The address recorded in school record is ' + address + '.' if address else ''}",
+            "This certificate is issued on request for official use.",
+        ]
+    elif certificate_type == "character":
+        title = "CHARACTER CERTIFICATE"
+        paragraphs = [
+            (
+                f"This is to certify that {name}, child of Mr. {father}"
+                f"{' and Mrs. ' + mother if mother else ''}, is/was a student of P.S. Public School."
+            ),
+            f"The student is/was enrolled in Class {class_label} during the academic session {session}.",
+            "To the best of our knowledge, the student's conduct, behavior, and character have been satisfactory.",
+            "This certificate is issued on request for official use.",
+        ]
+    elif certificate_type == "study":
+        title = "STUDY CERTIFICATE"
+        paragraphs = [
+            (
+                f"This is to certify that {name}, child of Mr. {father}"
+                f"{' and Mrs. ' + mother if mother else ''}, is a student of P.S. Public School."
+            ),
+            f"The student is studying in Class {class_label} during the academic session {session}.",
+            f"Admission No.: {admission_no}{' | Roll No.: ' + roll if roll else ''}",
+            "This certificate is issued as per school records.",
+        ]
+    else:
+        title = "CERTIFICATE"
+        paragraphs = ["Please contact the school office for this certificate."]
+
+    return {
+        "title": title,
+        "admission_no": admission_no,
+        "date": datetime.utcnow().strftime("%d/%m/%Y"),
+        "paragraphs": [paragraph for paragraph in paragraphs if paragraph.strip()],
+    }
+
+
+def write_professional_certificate_pdf(path, student, certificate_type):
+    content = certificate_content(student, certificate_type)
+    commands = [
+        "q",
+        "0.96 0.97 0.99 rg",
+        "35 35 525 772 re f",
+        "Q",
+        "q",
+        "1 1 1 rg",
+        "45 45 505 752 re f",
+        "Q",
+        "q",
+        "0.05 0.18 0.35 RG",
+        "2 w",
+        "45 45 505 752 re S",
+        "Q",
+        "q",
+        "0.05 0.18 0.35 RG",
+        "1.2 w",
+        "70 680 m 525 680 l S",
+        "Q",
+        "q",
+        "0.05 0.18 0.35 RG",
+        "2 w",
+        "82 725 34 34 re S",
+        "Q",
+        "BT",
+        "/F2 18 Tf",
+        "88 745 Td",
+        f"({pdf_escape('PS')}) Tj",
+        "ET",
+        "BT",
+        "/F1 6 Tf",
+        "80 716 Td",
+        f"({pdf_escape('PUBLIC SCHOOL')}) Tj",
+        "ET",
+        "BT",
+        "/F2 26 Tf",
+        "150 747 Td",
+        f"({pdf_escape('P.S. PUBLIC SCHOOL')}) Tj",
+        "ET",
+        "BT",
+        "/F1 12 Tf",
+        "177 725 Td",
+        f"({pdf_escape('Ganaur Road Bhurri (Sonipat) - 131101')}) Tj",
+        "ET",
+        "BT",
+        "/F2 15 Tf",
+        "210 645 Td",
+        f"({pdf_escape(content['title'])}) Tj",
+        "ET",
+        "BT",
+        "/F1 11 Tf",
+        "70 610 Td",
+        f"({pdf_escape('Date: ' + content['date'])}) Tj",
+        "0 -20 Td",
+        f"({pdf_escape('Admission No.: ' + content['admission_no'])}) Tj",
+        "ET",
+    ]
+
+    y = 550
+    for paragraph in content["paragraphs"]:
+        wrapped_lines = wrap_pdf_text(paragraph)
+        commands.extend(["BT", "/F1 11 Tf", f"70 {y} Td"])
+        first = True
+        for line in wrapped_lines:
+            if not first:
+                commands.append("0 -17 Td")
+                y -= 17
+            commands.append(f"({pdf_escape(line)}) Tj")
+            first = False
+        commands.append("ET")
+        y -= 34
+
+    note_lines = [
+        "Note: This digitally generated certificate is based on school records.",
+        "For signed/stamped hard copy, please contact the school office.",
+    ]
+    y = max(y, 225)
+    commands.extend(["BT", "/F1 10 Tf", f"70 {y} Td"])
+    for index, line in enumerate(note_lines):
+        if index:
+            commands.append("0 -16 Td")
+        commands.append(f"({pdf_escape(line)}) Tj")
+    commands.append("ET")
+
+    commands.extend(
+        [
+            "q",
+            "0.05 0.18 0.35 RG",
+            "1 w",
+            "365 180 m 505 180 l S",
+            "Q",
+            "BT",
+            "/F2 13 Tf",
+            "370 197 Td",
+            f"({pdf_escape('Naveen Kumar')}) Tj",
+            "ET",
+            "BT",
+            "/F1 10 Tf",
+            "370 165 Td",
+            f"({pdf_escape('Principal')}) Tj",
+            "0 -15 Td",
+            f"({pdf_escape('Digitally signed by Naveen Kumar, Principal')}) Tj",
+            "ET",
+        ]
+    )
+
+    stream = "\n".join(commands)
+    objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Kids [5 0 R] /Count 1 >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>",
+        (
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+            "/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> "
+            "/Contents 6 0 R >>"
+        ),
+        f"<< /Length {len(stream.encode('latin-1', errors='replace'))} >>\nstream\n{stream}\nendstream",
+    ]
+
+    pdf_parts = ["%PDF-1.4\n"]
+    offsets = [0]
+    for index, body in enumerate(objects, start=1):
+        offsets.append(sum(len(part.encode("latin-1", errors="replace")) for part in pdf_parts))
+        pdf_parts.append(f"{index} 0 obj\n{body}\nendobj\n")
+
+    xref_offset = sum(len(part.encode("latin-1", errors="replace")) for part in pdf_parts)
+    pdf_parts.append(f"xref\n0 {len(objects) + 1}\n")
+    pdf_parts.append("0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        pdf_parts.append(f"{offset:010d} 00000 n \n")
+    pdf_parts.append(
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
+        f"startxref\n{xref_offset}\n%%EOF\n"
+    )
+
+    with open(path, "wb") as pdf_file:
+        pdf_file.write("".join(pdf_parts).encode("latin-1", errors="replace"))
+
+
 def create_certificate_pdf(student, certificate_type):
     admission_no = clean_certificate_value(first_present(student, ["admission_no", "admissionNo"]), "student")
     safe_admission = re.sub(r"[^A-Za-z0-9_-]", "_", admission_no)
     safe_type = re.sub(r"[^A-Za-z0-9_-]", "_", certificate_type)
     filename = f"{safe_type}_certificate_{safe_admission}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.pdf"
     path = os.path.join(RESULTS_DIR, filename)
-    write_simple_pdf(path, certificate_pdf_lines(student, certificate_type))
+    write_professional_certificate_pdf(path, student, certificate_type)
     return filename
 
 
