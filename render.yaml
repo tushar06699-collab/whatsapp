@@ -24,3 +24,5 @@ services:
         sync: false
       - key: STUDENT_BACKEND_URL
         value: https://student-backend-117372286918.asia-south1.run.app
+      - key: PUBLIC_BASE_URL
+        sync: false

@@ -7,7 +7,7 @@ from urllib.parse import urlencode
 
 import requests
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request, url_for
+from flask import Flask, has_request_context, jsonify, request, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv()
@@ -32,6 +32,7 @@ EXAM_BACKEND_STUDENT_LOGIN_URL = os.getenv(
     DEFAULT_EXAM_BACKEND_STUDENT_LOGIN_URL,
 ).strip()
 STUDENT_BACKEND_URL = os.getenv("STUDENT_BACKEND_URL", DEFAULT_STUDENT_BACKEND_URL).strip()
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
@@ -736,6 +737,17 @@ def build_url(base_url, path, params=None):
     return url
 
 
+def build_public_static_url(filename):
+    if PUBLIC_BASE_URL:
+        return f"{PUBLIC_BASE_URL}/static/{filename.lstrip('/')}"
+
+    if has_request_context():
+        return url_for("static", filename=filename, _external=True, _scheme="https")
+
+    logger.warning("PUBLIC_BASE_URL is not set; cannot build public URL outside request context.")
+    return ""
+
+
 def fetch_json_url(url, timeout=20):
     response = requests.get(url, timeout=timeout)
     response.raise_for_status()
@@ -773,6 +785,10 @@ def get_result_status_text(key, language):
             "en": "No published result found for your profile.",
             "hi": "आपके profile के लिए कोई published result नहीं मिला।",
         },
+        "backend_unavailable": {
+            "en": "Result service is temporarily unavailable. Please try again later or contact the school office.",
+            "hi": "Result service अभी उपलब्ध नहीं है। कृपया बाद में प्रयास करें या स्कूल कार्यालय से संपर्क करें।",
+        },
     }
     return labels[key][language]
 
@@ -805,9 +821,9 @@ def fetch_student_results(student, language):
 
     try:
         exams_data = fetch_json_url(build_url(exam_base_url, "/exam/list-all"))
-    except requests.RequestException as exc:
+    except Exception as exc:
         logger.error("Unable to fetch exam list: %s", exc)
-        return {"ok": False, "reason": "result_error"}
+        return {"ok": True, "status": "backend_unavailable", "profile": profile, "exams": []}
 
     exams = exams_data.get("exams", []) if isinstance(exams_data, dict) else []
     result_exams = []
@@ -832,7 +848,8 @@ def fetch_student_results(student, language):
                     },
                 )
             )
-        except requests.RequestException:
+        except Exception as exc:
+            logger.warning("Unable to fetch result status for %s: %s", exam_name, exc)
             result_exams.append({"exam_name": exam_name, "status": "coming_soon"})
             continue
 
@@ -852,7 +869,8 @@ def fetch_student_results(student, language):
                     },
                 )
             )
-        except requests.RequestException:
+        except Exception as exc:
+            logger.warning("Unable to fetch marks for %s: %s", exam_name, exc)
             result_exams.append({"exam_name": exam_name, "status": "not_uploaded"})
             continue
 
@@ -910,7 +928,7 @@ def fetch_student_results(student, language):
                     external_max = int(float(config.get("external_max_marks") or 0))
                 if allow_internal and config.get("internal_max_marks") is not None:
                     internal_max = int(float(config.get("internal_max_marks") or 0))
-            except requests.RequestException:
+            except Exception:
                 pass
 
             if allow_internal:
@@ -931,7 +949,7 @@ def fetch_student_results(student, language):
                         if str(row.get("student_id") or "") in student_ids:
                             internal = int(float(row.get("marks") or 0))
                             break
-                except requests.RequestException:
+                except Exception:
                     pass
 
             subject_total = external + internal
@@ -1770,12 +1788,9 @@ def send_results_exams_flow(to_phone_number, language, student):
 
     try:
         pdf_filename = create_result_pdf(result_data)
-        pdf_url = url_for(
-            "static",
-            filename=f"results/{pdf_filename}",
-            _external=True,
-            _scheme="https",
-        )
+        pdf_url = build_public_static_url(f"results/{pdf_filename}")
+        if not pdf_url:
+            raise RuntimeError("Unable to build public result PDF URL.")
         send_result_document_message(
             to_phone_number,
             pdf_url,
@@ -1935,6 +1950,7 @@ def debug_config():
             "exam_backend_student_login_url": EXAM_BACKEND_STUDENT_LOGIN_URL,
             "effective_student_login_url": get_student_login_url(),
             "student_backend_url": STUDENT_BACKEND_URL,
+            "public_base_url": PUBLIC_BASE_URL,
             "service_menu_delay_seconds": SERVICE_MENU_DELAY_SECONDS,
         }
     )
