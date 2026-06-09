@@ -2,7 +2,7 @@ import logging
 import os
 import re
 import threading
-from datetime import datetime
+from datetime import date, datetime
 from urllib.parse import urlencode
 
 import requests
@@ -129,13 +129,13 @@ SERVICES = {
     "other_services": {
         "title": {"en": "Academic Services", "hi": "शैक्षणिक सेवाएं"},
         "description": {
-            "en": "Books, uniform, certificates, timing",
+            "en": "Student Details,Results, certificates, etc.",
             "hi": "किताबें, यूनिफॉर्म, प्रमाण पत्र",
         },
         "reply": {
             "en": (
                 "Academic Services\n\n"
-                "For books, uniforms, certificates, school timings, or general support, "
+                "For Student Details, Result, certificates, or general support, "
                 "please contact the school office."
             ),
             "hi": (
@@ -577,12 +577,12 @@ STUDENT_LOGIN_TEXT = {
     "ask_password": {
         "en": (
             "Now please send the student's DOB exactly as saved in the exam portal.\n\n"
-            "You can send it as DD/MM/YYYY, MM/DD/YYYY, DD-MM-YYYY, MM-DD-YYYY, or DDMMYYYY.\n\n"
+            "You can send it as DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD, DD-MM-YYYY, MM-DD-YYYY, or DDMMYYYY.\n\n"
             "For privacy, this is used only for login verification and is not stored."
         ),
         "hi": (
             "अब कृपया विद्यार्थी की DOB भेजें, बिल्कुल वैसे ही जैसे exam portal में saved है।\n\n"
-            "आप DOB को DD/MM/YYYY, MM/DD/YYYY, DD-MM-YYYY, MM-DD-YYYY या DDMMYYYY format में भेज सकते हैं।\n\n"
+            "आप DOB को DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD, DD-MM-YYYY, MM-DD-YYYY या DDMMYYYY format में भेज सकते हैं।\n\n"
             "गोपनीयता के लिए यह केवल login verification के लिए उपयोग होगा, store नहीं किया जाएगा।"
         ),
     },
@@ -1440,12 +1440,82 @@ def normalize_dob_for_exam_login(raw_password):
     return normalized
 
 
+def add_valid_dob(candidates, day, month, year):
+    try:
+        day_i = int(day)
+        month_i = int(month)
+        year_i = int(year)
+        parsed = date(year_i, month_i, day_i)
+    except (TypeError, ValueError):
+        return
+
+    candidates.update(
+        {
+            parsed.strftime("%d/%m/%Y"),
+            parsed.strftime("%m/%d/%Y"),
+            parsed.strftime("%d-%m-%Y"),
+            parsed.strftime("%m-%d-%Y"),
+            parsed.strftime("%Y-%m-%d"),
+            parsed.strftime("%Y/%m/%d"),
+            parsed.strftime("%d%m%Y"),
+            parsed.strftime("%m%d%Y"),
+            parsed.strftime("%Y%m%d"),
+        }
+    )
+
+
+def dob_canonical_values(raw_dob):
+    value = str(raw_dob or "").strip()
+    canonical = set()
+    if not value:
+        return canonical
+
+    digits = re.sub(r"\D", "", value)
+    if len(digits) == 8:
+        possible_parts = [
+            (digits[0:2], digits[2:4], digits[4:8]),  # DDMMYYYY
+            (digits[2:4], digits[0:2], digits[4:8]),  # MMDDYYYY
+            (digits[6:8], digits[4:6], digits[0:4]),  # YYYYMMDD
+        ]
+        for day, month, year in possible_parts:
+            try:
+                canonical.add(date(int(year), int(month), int(day)).isoformat())
+            except ValueError:
+                pass
+
+    parts = re.split(r"[\/\-.]", value)
+    if len(parts) == 3 and all(part.strip().isdigit() for part in parts):
+        first, second, third = [part.strip() for part in parts]
+        if len(first) == 4:
+            possible_parts = [(third, second, first)]  # YYYY-MM-DD
+        else:
+            year = third
+            if len(year) == 2:
+                year = f"20{year}" if int(year) <= 40 else f"19{year}"
+            possible_parts = [
+                (first, second, year),  # DD/MM/YYYY
+                (second, first, year),  # MM/DD/YYYY
+            ]
+
+        for day, month, year in possible_parts:
+            try:
+                canonical.add(date(int(year), int(month), int(day)).isoformat())
+            except ValueError:
+                pass
+
+    return canonical
+
+
 def dob_candidate_values(raw_dob):
     value = str(raw_dob or "").strip()
     if not value:
         return []
 
     candidates = {value, value.replace("-", "/").replace(".", "/")}
+    for canonical in dob_canonical_values(value):
+        year, month, day = canonical.split("-")
+        add_valid_dob(candidates, day, month, year)
+
     digits = re.sub(r"\D", "", value)
 
     if len(digits) == 8:
@@ -1483,6 +1553,11 @@ def dob_candidate_values(raw_dob):
 
 
 def dob_match(user_dob, saved_dob):
+    user_canonical = dob_canonical_values(user_dob)
+    saved_canonical = dob_canonical_values(saved_dob)
+    if user_canonical and saved_canonical:
+        return bool(user_canonical & saved_canonical)
+
     user_candidates = {item.lower() for item in dob_candidate_values(user_dob)}
     saved_candidates = {item.lower() for item in dob_candidate_values(saved_dob)}
     return bool(user_candidates & saved_candidates)
