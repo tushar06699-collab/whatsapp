@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import threading
+from datetime import datetime
 
 import requests
 from dotenv import load_dotenv
@@ -41,6 +42,7 @@ logger = logging.getLogger(__name__)
 # For multiple workers/instances, move this to a small database or Redis.
 LANGUAGE_BY_USER = {}
 STUDENT_DETAIL_SESSIONS = {}
+STUDENT_AUTH_BY_USER = {}
 
 LANGUAGE_LABELS = {
     "en": "English",
@@ -711,6 +713,10 @@ def send_document_message(to_phone_number, document_url, filename, caption):
     return send_whatsapp_payload(payload)
 
 
+def send_result_document_message(to_phone_number, document_url, filename, caption):
+    return send_document_message(to_phone_number, document_url, filename, caption)
+
+
 def send_language_buttons(to_phone_number):
     payload = {
         "messaging_product": "whatsapp",
@@ -962,8 +968,33 @@ def start_student_details_flow(to_phone_number, language):
     STUDENT_DETAIL_SESSIONS[to_phone_number] = {
         "step": "awaiting_username",
         "language": language,
+        "after_login": "show_student_details",
     }
     send_text_message(to_phone_number, STUDENT_LOGIN_TEXT["ask_username"][language])
+
+
+def start_other_services_login_flow(to_phone_number, language):
+    STUDENT_DETAIL_SESSIONS[to_phone_number] = {
+        "step": "awaiting_username",
+        "language": language,
+        "after_login": "show_other_services",
+    }
+    send_text_message(
+        to_phone_number,
+        {
+            "en": (
+                "Other Services Login\n\n"
+                "For student privacy, please verify once before using Other Services.\n\n"
+                "Please send the student's admission number."
+            ),
+            "hi": (
+                "अन्य सेवाएं लॉगिन\n\n"
+                "विद्यार्थी की गोपनीयता के लिए Other Services उपयोग करने से पहले "
+                "कृपया एक बार verification करें।\n\n"
+                "कृपया विद्यार्थी का admission number भेजें।"
+            ),
+        }[language],
+    )
 
 
 def normalize_dob_for_exam_login(raw_password):
@@ -1237,15 +1268,24 @@ def handle_student_details_session(to_phone_number, message_text):
     if session.get("step") == "awaiting_password":
         username = session.get("username", "")
         password = message_text.strip()
+        after_login = session.get("after_login", "show_student_details")
         STUDENT_DETAIL_SESSIONS.pop(to_phone_number, None)
-        run_later(0.1, process_student_details_login, to_phone_number, username, password, language)
+        run_later(
+            0.1,
+            process_student_details_login,
+            to_phone_number,
+            username,
+            password,
+            language,
+            after_login,
+        )
         return True
 
     STUDENT_DETAIL_SESSIONS.pop(to_phone_number, None)
     return False
 
 
-def process_student_details_login(to_phone_number, username, password, language):
+def process_student_details_login(to_phone_number, username, password, language, after_login):
     try:
         result = fetch_student_details(username, password)
     except Exception as exc:
@@ -1258,6 +1298,22 @@ def process_student_details_login(to_phone_number, username, password, language)
             to_phone_number,
             STUDENT_LOGIN_TEXT[result["reason"]][language],
         )
+        return
+
+    STUDENT_AUTH_BY_USER[to_phone_number] = {
+        "student": result["student"],
+        "language": language,
+    }
+
+    if after_login == "show_other_services":
+        send_text_message(
+            to_phone_number,
+            {
+                "en": "Verification successful. You can now use Other Services without logging in again.",
+                "hi": "Verification सफल रहा। अब आप दोबारा login किए बिना Other Services उपयोग कर सकते हैं।",
+            }[language],
+        )
+        send_other_services_list_message(to_phone_number, language)
         return
 
     try:
@@ -1318,6 +1374,10 @@ def reply_to_user(to_phone_number, message_text):
         return
 
     if service_id == "other_services":
+        if to_phone_number not in STUDENT_AUTH_BY_USER:
+            start_other_services_login_flow(to_phone_number, language)
+            return
+
         send_other_services_list_message(to_phone_number, language)
         return
 
@@ -1327,6 +1387,14 @@ def reply_to_user(to_phone_number, message_text):
 
     other_category_id = other_service_title_to_id(language).get(normalized_text, normalized_text)
     if other_category_id == "student_details":
+        auth = STUDENT_AUTH_BY_USER.get(to_phone_number)
+        if auth and isinstance(auth.get("student"), dict):
+            send_text_message(
+                to_phone_number,
+                format_student_details(auth["student"], language),
+            )
+            return
+
         start_student_details_flow(to_phone_number, language)
         return
 

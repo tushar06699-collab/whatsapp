@@ -269,7 +269,9 @@ Subscribe to the WhatsApp `messages` webhook field.
 
 ## Student Details Setup
 
-The `Other Services -> Student Details` option asks for the student's exam portal username and password, then calls the exam backend login API.
+`Other Services` asks for the student's admission number and DOB once, then saves the verified student for that WhatsApp chat while the app is running. After verification, all Other Services categories can be used without logging in again.
+
+The `Other Services -> Student Details` option uses the verified admission number and DOB login, then calls the exam backend login API.
 
 Set this in Render:
 
