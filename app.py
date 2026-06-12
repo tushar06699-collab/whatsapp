@@ -26,11 +26,13 @@ ONLINE_ADMISSION_FORM_URL = os.getenv(
 DEFAULT_EXAM_BACKEND_STUDENT_LOGIN_URL = (
     "https://exam-backend-117372286918.asia-south1.run.app/login"
 )
+DEFAULT_EXAM_BACKEND_URL = "https://exam-backend-117372286918.asia-south1.run.app"
 DEFAULT_STUDENT_BACKEND_URL = "https://student-backend-117372286918.asia-south1.run.app"
 EXAM_BACKEND_STUDENT_LOGIN_URL = os.getenv(
     "EXAM_BACKEND_STUDENT_LOGIN_URL",
     DEFAULT_EXAM_BACKEND_STUDENT_LOGIN_URL,
 ).strip()
+EXAM_BACKEND_URL = os.getenv("EXAM_BACKEND_URL", DEFAULT_EXAM_BACKEND_URL).strip()
 STUDENT_BACKEND_URL = os.getenv("STUDENT_BACKEND_URL", DEFAULT_STUDENT_BACKEND_URL).strip()
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
 
@@ -2107,11 +2109,15 @@ def get_student_login_url():
 
 
 def get_exam_backend_base_url():
+    configured_base_url = (EXAM_BACKEND_URL or "").strip().rstrip("/")
+    if configured_base_url and "YOUR-EXAM-BACKEND" not in configured_base_url:
+        return configured_base_url
+
     student_login_url = get_student_login_url()
     if "/login" in student_login_url:
         return student_login_url.rsplit("/login", 1)[0].rstrip("/")
 
-    return student_login_url.rstrip("/")
+    return DEFAULT_EXAM_BACKEND_URL
 
 
 def fetch_student_profile(student):
@@ -2673,6 +2679,7 @@ def debug_config():
             "admission_form_pdf_url_configured": bool(ADMISSION_FORM_PDF_URL),
             "exam_backend_student_login_url": EXAM_BACKEND_STUDENT_LOGIN_URL,
             "effective_student_login_url": get_student_login_url(),
+            "exam_backend_url": get_exam_backend_base_url(),
             "student_backend_url": STUDENT_BACKEND_URL,
             "public_base_url": PUBLIC_BASE_URL,
             "service_menu_delay_seconds": SERVICE_MENU_DELAY_SECONDS,
