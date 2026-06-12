@@ -1210,12 +1210,181 @@ def result_pdf_lines(result_data):
     return lines
 
 
+def draw_marksheet_pdf(path, result_data):
+    from io import BytesIO
+
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.pdfgen import canvas
+    from reportlab.platypus import Paragraph, Table, TableStyle
+
+    profile = result_data.get("profile") or {}
+    width, height = A4
+    pdf = canvas.Canvas(path, pagesize=A4)
+
+    def clean(value, fallback="-"):
+        text = str(value or "").strip()
+        return fallback if not text or text.lower() in {"nan", "none", "null"} else text
+
+    def draw_header():
+        pdf.setStrokeColor(colors.HexColor("#0b2f5b"))
+        pdf.setLineWidth(1.6)
+        pdf.rect(13 * mm, 12 * mm, width - 26 * mm, height - 24 * mm)
+
+        pdf.setFillColor(colors.HexColor("#0b2f5b"))
+        pdf.circle(30 * mm, height - 28 * mm, 12 * mm, stroke=1, fill=0)
+        pdf.setFont("Helvetica-Bold", 14)
+        pdf.drawCentredString(30 * mm, height - 30 * mm, "PS")
+        pdf.setFont("Helvetica", 6)
+        pdf.drawCentredString(30 * mm, height - 37 * mm, "PUBLIC SCHOOL")
+
+        pdf.setFont("Helvetica-Bold", 24)
+        pdf.drawCentredString(width / 2, height - 25 * mm, "P.S. PUBLIC SCHOOL")
+        pdf.setFont("Helvetica", 11)
+        pdf.drawCentredString(width / 2, height - 32 * mm, "Ganaur Road Bhurri (Sonipat) - 131101")
+        pdf.setFont("Helvetica", 8)
+        pdf.drawCentredString(width / 2, height - 38 * mm, "Phone: +91 94162 93661 | Email: psbhurri@gmail.com | Website: pspublicschool.com")
+
+        pdf.line(22 * mm, height - 45 * mm, width - 22 * mm, height - 45 * mm)
+        pdf.setFont("Helvetica-Bold", 15)
+        pdf.drawCentredString(width / 2, height - 55 * mm, "STUDENT RESULT / MARKSHEET")
+
+    def draw_photo(x, y):
+        photo_url = get_student_photo_url(profile)
+        pdf.setStrokeColor(colors.HexColor("#0b2f5b"))
+        pdf.rect(x, y, 30 * mm, 38 * mm)
+        if not photo_url:
+            pdf.setFont("Helvetica", 8)
+            pdf.drawCentredString(x + 15 * mm, y + 19 * mm, "PHOTO")
+            return
+        try:
+            response = requests.get(photo_url, timeout=10)
+            response.raise_for_status()
+            image_data = BytesIO(response.content)
+            pdf.drawImage(image_data, x + 1.5 * mm, y + 1.5 * mm, 27 * mm, 35 * mm, preserveAspectRatio=True, anchor="c")
+        except Exception as exc:
+            logger.warning("Unable to draw student photo in marksheet PDF: %s", exc)
+            pdf.setFont("Helvetica", 8)
+            pdf.drawCentredString(x + 15 * mm, y + 21 * mm, "PHOTO")
+            pdf.drawCentredString(x + 15 * mm, y + 16 * mm, "ON RECORD")
+
+    draw_header()
+
+    y = height - 70 * mm
+    draw_photo(width - 55 * mm, y - 34 * mm)
+
+    pdf.setFont("Helvetica-Bold", 10)
+    details = [
+        ("Name", clean(profile.get("name") or profile.get("student_name"))),
+        ("Admission No.", clean(profile.get("admission_no"))),
+        ("Class", f"{clean(profile.get('class_name') or profile.get('class'))} {clean(profile.get('section'), '')}".strip()),
+        ("Roll No.", clean(profile.get("roll") or profile.get("rollno"))),
+        ("Father Name", clean(profile.get("father_name"))),
+        ("Session", clean(profile.get("session"))),
+    ]
+    x_label = 24 * mm
+    x_value = 58 * mm
+    for label, value in details:
+        pdf.setFont("Helvetica-Bold", 9.5)
+        pdf.drawString(x_label, y, f"{label}:")
+        pdf.setFont("Helvetica", 9.5)
+        pdf.drawString(x_value, y, value)
+        y -= 7 * mm
+
+    y -= 5 * mm
+    normal_style = ParagraphStyle("normal", fontName="Helvetica", fontSize=8, leading=10)
+    for exam in result_data.get("exams", []):
+        if exam.get("status") != "published" or not exam.get("rows"):
+            continue
+
+        pdf.setFillColor(colors.HexColor("#0b2f5b"))
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.drawString(22 * mm, y, f"Exam: {exam.get('exam_name', 'Exam')}")
+        pdf.setFillColor(colors.black)
+        y -= 7 * mm
+
+        table_data = [[
+            "Subject", "External", "Internal", "Total", "Status"
+        ]]
+        for row in exam.get("rows", []):
+            table_data.append([
+                Paragraph(str(row["subject"]), normal_style),
+                f"{row['external']}/{row['external_max']}",
+                f"{row['internal']}/{row['internal_max']}",
+                f"{row['total']}/{row['total_max']}",
+                row["status"],
+            ])
+
+        table = Table(table_data, colWidths=[58 * mm, 28 * mm, 28 * mm, 28 * mm, 25 * mm])
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0b2f5b")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#7f8ea3")),
+            ("ALIGN", (1, 1), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f4f7fb")]),
+        ]))
+        table_width, table_height = table.wrapOn(pdf, width, height)
+        table.drawOn(pdf, 22 * mm, y - table_height)
+        y -= table_height + 8 * mm
+
+        percentage = (exam.get("total", 0) / exam.get("total_max", 1) * 100) if exam.get("total_max") else 0
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawString(22 * mm, y, f"Result: {exam.get('result')}    Total: {exam.get('total')}/{exam.get('total_max')}    Percentage: {percentage:.2f}%")
+        y -= 12 * mm
+
+    coscholastic = [
+        ["Co-Scholastic Area", "Grade"],
+        ["Discipline", "A"],
+        ["Attendance & Punctuality", "A"],
+        ["Participation in School Activities", "A"],
+        ["Cleanliness & Uniform", "A"],
+    ]
+    pdf.setFont("Helvetica-Bold", 11)
+    pdf.drawString(22 * mm, y, "Co-Scholastic / Extra Activities")
+    y -= 7 * mm
+    act_table = Table(coscholastic, colWidths=[95 * mm, 30 * mm])
+    act_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8eef7")),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#7f8ea3")),
+        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+        ("ALIGN", (1, 1), (-1, -1), "CENTER"),
+    ]))
+    tw, th = act_table.wrapOn(pdf, width, height)
+    act_table.drawOn(pdf, 22 * mm, y - th)
+
+    pdf.setFont("Helvetica", 8)
+    pdf.drawString(22 * mm, 42 * mm, "Note: This digitally generated marksheet is based on school records.")
+    pdf.drawString(22 * mm, 37 * mm, "For signed/stamped hard copy, please contact the school office.")
+
+    pdf.setStrokeColor(colors.HexColor("#0b2f5b"))
+    pdf.line(width - 65 * mm, 43 * mm, width - 23 * mm, 43 * mm)
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawString(width - 62 * mm, 47 * mm, "Naveen Kumar")
+    pdf.setFont("Helvetica", 8.5)
+    pdf.drawString(width - 58 * mm, 38 * mm, "Principal")
+    pdf.drawString(width - 70 * mm, 33 * mm, "Digitally signed by Naveen Kumar, Principal")
+
+    pdf.showPage()
+    pdf.save()
+
+
 def create_result_pdf(result_data):
     profile = result_data.get("profile") or {}
     safe_admission = re.sub(r"[^A-Za-z0-9_-]", "_", str(profile.get("admission_no") or "student"))
     filename = f"result_{safe_admission}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.pdf"
     path = os.path.join(RESULTS_DIR, filename)
-    write_simple_pdf(path, result_pdf_lines(result_data))
+    try:
+        draw_marksheet_pdf(path, result_data)
+    except Exception as exc:
+        logger.exception("Professional marksheet PDF failed, using simple PDF: %s", exc)
+        write_simple_pdf(path, result_pdf_lines(result_data))
     return filename
 
 
@@ -2491,6 +2660,16 @@ def send_results_exams_flow(to_phone_number, language, student):
         return
 
     send_text_message(to_phone_number, result_summary_text(result_data, language))
+
+    has_successful_result = (
+        result_data.get("status") == "ok"
+        and any(
+            exam.get("status") == "published" and exam.get("rows")
+            for exam in result_data.get("exams", [])
+        )
+    )
+    if not has_successful_result:
+        return
 
     try:
         pdf_filename = create_result_pdf(result_data)
