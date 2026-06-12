@@ -51,6 +51,7 @@ SCHOOL_LOGO_PATH = os.path.join(app.static_folder, "school-logo.png")
 LANGUAGE_BY_USER = {}
 STUDENT_DETAIL_SESSIONS = {}
 STUDENT_AUTH_BY_USER = {}
+MENU_CONTEXT_BY_USER = {}
 
 LANGUAGE_LABELS = {
     "en": "English",
@@ -73,6 +74,17 @@ SCHOOL_INTRO = {
 }
 
 SERVICES = {
+    "admission_services": {
+        "title": {"en": "Admission Services", "hi": "प्रवेश सेवाएं"},
+        "description": {
+            "en": "Admission, fee, transport, contact",
+            "hi": "प्रवेश, फीस, परिवहन, संपर्क",
+        },
+        "reply": {
+            "en": "Admission Services",
+            "hi": "प्रवेश सेवाएं",
+        },
+    },
     "admission_enquiry": {
         "title": {"en": "Admission Enquiry", "hi": "प्रवेश जानकारी"},
         "description": {
@@ -146,6 +158,17 @@ SERVICES = {
                 "किताबें, यूनिफॉर्म, प्रमाण पत्र, स्कूल समय या सामान्य सहायता के लिए "
                 "कृपया स्कूल कार्यालय से संपर्क करें।"
             ),
+        },
+    },
+    "exam_services": {
+        "title": {"en": "Exam Services", "hi": "परीक्षा सेवाएं"},
+        "description": {
+            "en": "Results, exams, report card",
+            "hi": "रिजल्ट, परीक्षा, रिपोर्ट कार्ड",
+        },
+        "reply": {
+            "en": "Exam Services",
+            "hi": "परीक्षा सेवाएं",
         },
     },
     "change_language": {
@@ -319,6 +342,32 @@ CERTIFICATE_CATEGORIES = {
     },
 }
 
+MAIN_SERVICE_IDS = [
+    "admission_services",
+    "other_services",
+    "exam_services",
+    "change_language",
+]
+
+ADMISSION_SERVICE_IDS = [
+    "admission_enquiry",
+    "fee_structure",
+    "transport_facility",
+    "contact_school",
+]
+
+ACADEMIC_CATEGORY_IDS = [
+    "student_details",
+    "certificates",
+    "academic_support",
+    "uniform_books",
+    "school_timing",
+]
+
+EXAM_CATEGORY_IDS = [
+    "results_exams",
+]
+
 ACTION_REPLIES = {
     "fill_admission_form": {
         "en": (
@@ -348,6 +397,11 @@ ACTION_REPLIES = {
             "वेबसाइट: pspublicschool.com"
         ),
     },
+}
+
+NAVIGATION_ACTIONS = {
+    "nav_main_menu",
+    "nav_previous_menu",
 }
 
 SCHOOL_HIGHLIGHTS_MESSAGE = {
@@ -1871,6 +1925,7 @@ def send_certificate_flow(to_phone_number, language, student, certificate_id):
                 ),
             }[language],
         )
+        send_navigation_buttons(to_phone_number, language, "certificates")
         return
 
     try:
@@ -1892,6 +1947,7 @@ def send_certificate_flow(to_phone_number, language, student, certificate_id):
             f"{certificate['title']['en']}.pdf",
             certificate["title"][language],
         )
+        send_navigation_buttons(to_phone_number, language, "certificates")
     except Exception as exc:
         logger.exception("Failed to generate certificate: %s", exc)
         send_text_message(
@@ -1901,6 +1957,7 @@ def send_certificate_flow(to_phone_number, language, student, certificate_id):
                 "hi": "Certificate PDF अभी generate नहीं हो पाया। कृपया बाद में प्रयास करें या कार्यालय से संपर्क करें।",
             }[language],
         )
+        send_navigation_buttons(to_phone_number, language, "certificates")
 
 
 def send_language_buttons(to_phone_number):
@@ -1971,6 +2028,51 @@ def send_admission_action_buttons(to_phone_number, language):
     return send_whatsapp_payload(payload)
 
 
+def set_menu_context(to_phone_number, current_menu, previous_menu="main"):
+    MENU_CONTEXT_BY_USER[to_phone_number] = {
+        "current": current_menu,
+        "previous": previous_menu,
+    }
+
+
+def send_navigation_buttons(to_phone_number, language, previous_menu="main"):
+    set_menu_context(to_phone_number, "navigation", previous_menu)
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to_phone_number,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {
+                "text": {
+                    "en": "Where would you like to go next?",
+                    "hi": "अब आप कहां जाना चाहते हैं?",
+                }[language]
+            },
+            "action": {
+                "buttons": [
+                    {
+                        "type": "reply",
+                        "reply": {
+                            "id": "nav_main_menu",
+                            "title": {"en": "Main Menu", "hi": "मुख्य मेनू"}[language],
+                        },
+                    },
+                    {
+                        "type": "reply",
+                        "reply": {
+                            "id": "nav_previous_menu",
+                            "title": {"en": "Previous Menu", "hi": "पिछला मेनू"}[language],
+                        },
+                    },
+                ]
+            },
+        },
+    }
+    return send_whatsapp_payload(payload)
+
+
 def run_later(delay_seconds, callback, *args):
     timer = threading.Timer(delay_seconds, callback, args=args)
     timer.daemon = True
@@ -1990,13 +2092,15 @@ def safe_reply_to_user(to_phone_number, message_text):
 
 
 def send_service_list_message(to_phone_number, language):
+    set_menu_context(to_phone_number, "main", "main")
     rows = [
         {
             "id": service_id,
             "title": service["title"][language],
             "description": service["description"][language],
         }
-        for service_id, service in SERVICES.items()
+        for service_id in MAIN_SERVICE_IDS
+        for service in [SERVICES[service_id]]
     ]
     payload = {
         "messaging_product": "whatsapp",
@@ -2035,14 +2139,58 @@ def send_service_list_message(to_phone_number, language):
     return send_whatsapp_payload(payload)
 
 
+def send_admission_services_list_message(to_phone_number, language):
+    set_menu_context(to_phone_number, "admission", "main")
+    rows = [
+        {
+            "id": service_id,
+            "title": SERVICES[service_id]["title"][language],
+            "description": SERVICES[service_id]["description"][language],
+        }
+        for service_id in ADMISSION_SERVICE_IDS
+    ]
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to_phone_number,
+        "type": "interactive",
+        "interactive": {
+            "type": "list",
+            "header": {
+                "type": "text",
+                "text": {"en": "Admission Services", "hi": "प्रवेश सेवाएं"}[language],
+            },
+            "body": {
+                "text": {
+                    "en": "Please select an admission-related service.",
+                    "hi": "कृपया प्रवेश से जुड़ी सेवा चुनें।",
+                }[language]
+            },
+            "footer": {"text": "P.S. Public School"},
+            "action": {
+                "button": {"en": "View Admission", "hi": "प्रवेश देखें"}[language],
+                "sections": [
+                    {
+                        "title": {"en": "Admission Services", "hi": "प्रवेश सेवाएं"}[language],
+                        "rows": rows,
+                    }
+                ],
+            },
+        },
+    }
+    return send_whatsapp_payload(payload)
+
+
 def send_other_services_list_message(to_phone_number, language):
+    set_menu_context(to_phone_number, "academic", "main")
     rows = [
         {
             "id": category_id,
             "title": category["title"][language],
             "description": category["description"][language],
         }
-        for category_id, category in OTHER_SERVICE_CATEGORIES.items()
+        for category_id in ACADEMIC_CATEGORY_IDS
+        for category in [OTHER_SERVICE_CATEGORIES[category_id]]
     ]
     payload = {
         "messaging_product": "whatsapp",
@@ -2081,7 +2229,50 @@ def send_other_services_list_message(to_phone_number, language):
     return send_whatsapp_payload(payload)
 
 
+def send_exam_services_list_message(to_phone_number, language):
+    set_menu_context(to_phone_number, "exam", "main")
+    rows = [
+        {
+            "id": category_id,
+            "title": OTHER_SERVICE_CATEGORIES[category_id]["title"][language],
+            "description": OTHER_SERVICE_CATEGORIES[category_id]["description"][language],
+        }
+        for category_id in EXAM_CATEGORY_IDS
+    ]
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to_phone_number,
+        "type": "interactive",
+        "interactive": {
+            "type": "list",
+            "header": {
+                "type": "text",
+                "text": {"en": "Exam Services", "hi": "परीक्षा सेवाएं"}[language],
+            },
+            "body": {
+                "text": {
+                    "en": "Please select the exam service you need.",
+                    "hi": "कृपया परीक्षा से जुड़ी सेवा चुनें।",
+                }[language]
+            },
+            "footer": {"text": "P.S. Public School"},
+            "action": {
+                "button": {"en": "View Exam", "hi": "परीक्षा देखें"}[language],
+                "sections": [
+                    {
+                        "title": {"en": "Exam Services", "hi": "परीक्षा सेवाएं"}[language],
+                        "rows": rows,
+                    }
+                ],
+            },
+        },
+    }
+    return send_whatsapp_payload(payload)
+
+
 def send_certificate_list_message(to_phone_number, language):
+    set_menu_context(to_phone_number, "certificates", "academic")
     rows = [
         {
             "id": certificate_id,
@@ -2184,16 +2375,19 @@ def send_admission_enquiry_flow(to_phone_number, language):
     )
     run_later(3, send_text_message, to_phone_number, ADMISSION_REQUIREMENTS_MESSAGE[language])
     run_later(4.5, send_admission_action_buttons, to_phone_number, language)
+    run_later(5.5, send_navigation_buttons, to_phone_number, language, "admission")
 
 
 def send_fee_structure_flow(to_phone_number, language):
     send_text_message(to_phone_number, FEE_OVERVIEW_MESSAGE[language])
     run_later(1.5, send_text_message, to_phone_number, FEE_STRUCTURE_MESSAGE[language])
+    run_later(2.5, send_navigation_buttons, to_phone_number, language, "admission")
 
 
 def send_transport_facility_flow(to_phone_number, language):
     send_text_message(to_phone_number, TRANSPORT_OVERVIEW_MESSAGE[language])
     run_later(1.5, send_text_message, to_phone_number, TRANSPORT_FEE_MESSAGE[language])
+    run_later(2.5, send_navigation_buttons, to_phone_number, language, "admission")
 
 
 def start_student_details_flow(to_phone_number, language):
@@ -2205,28 +2399,32 @@ def start_student_details_flow(to_phone_number, language):
     send_text_message(to_phone_number, STUDENT_LOGIN_TEXT["ask_username"][language])
 
 
-def start_other_services_login_flow(to_phone_number, language):
+def start_academic_services_login_flow(to_phone_number, language, after_login="show_academic_services"):
     STUDENT_DETAIL_SESSIONS[to_phone_number] = {
         "step": "awaiting_username",
         "language": language,
-        "after_login": "show_other_services",
+        "after_login": after_login,
     }
     send_text_message(
         to_phone_number,
         {
             "en": (
-                "Academic Services Login\n\n"
-                "For student privacy, please verify once before using Academic Services.\n\n"
+                "Student Verification\n\n"
+                "For student privacy, please verify once before using this service.\n\n"
                 "Please send the student's admission number."
             ),
             "hi": (
-                "शैक्षणिक सेवाएं लॉगिन\n\n"
-                "विद्यार्थी की गोपनीयता के लिए Academic Services उपयोग करने से पहले "
+                "Student Verification\n\n"
+                "विद्यार्थी की गोपनीयता के लिए यह service उपयोग करने से पहले "
                 "कृपया एक बार verification करें।\n\n"
                 "कृपया विद्यार्थी का admission number भेजें।"
             ),
         }[language],
     )
+
+
+def start_other_services_login_flow(to_phone_number, language):
+    start_academic_services_login_flow(to_phone_number, language, "show_academic_services")
 
 
 def normalize_dob_for_exam_login(raw_password):
@@ -2685,6 +2883,7 @@ def send_student_photo_if_available(to_phone_number, student, language):
 def send_student_details_response(to_phone_number, student, language):
     send_student_photo_if_available(to_phone_number, student, language)
     send_text_message(to_phone_number, format_student_details(student, language))
+    send_navigation_buttons(to_phone_number, language, "academic")
 
 
 def handle_student_details_session(to_phone_number, message_text):
@@ -2746,10 +2945,13 @@ def process_student_details_login(to_phone_number, username, password, language,
         "language": language,
     }
 
-    if after_login == "show_other_services":
+    if after_login in {"show_other_services", "show_academic_services", "show_exam_services"}:
         student_name = first_present(result["student"], ["name", "student_name"])
         admission_no = first_present(result["student"], ["admission_no", "admissionNo"])
         class_name = first_present(result["student"], ["class_name", "class"])
+        service_label = {
+            "show_exam_services": {"en": "Exam Services", "hi": "Exam Services"},
+        }.get(after_login, {"en": "Academic Services", "hi": "Academic Services"})[language]
         send_text_message(
             to_phone_number,
             {
@@ -2758,18 +2960,21 @@ def process_student_details_login(to_phone_number, username, password, language,
                     f"Student: {student_name}\n"
                     f"Admission No.: {admission_no}\n"
                     f"Class: {class_name}\n\n"
-                    "You can now use Academic Services without logging in again."
+                    f"You can now use {service_label} without logging in again."
                 ),
                 "hi": (
                     "Verification सफल रहा।\n\n"
                     f"विद्यार्थी: {student_name}\n"
                     f"Admission No.: {admission_no}\n"
                     f"कक्षा: {class_name}\n\n"
-                    "अब आप दोबारा login किए बिना Academic Services उपयोग कर सकते हैं।"
+                    f"अब आप दोबारा login किए बिना {service_label} उपयोग कर सकते हैं।"
                 ),
             }[language],
         )
-        send_other_services_list_message(to_phone_number, language)
+        if after_login == "show_exam_services":
+            send_exam_services_list_message(to_phone_number, language)
+        else:
+            send_other_services_list_message(to_phone_number, language)
         return
 
     if after_login == "show_results_exams":
@@ -2812,6 +3017,7 @@ def send_results_exams_flow(to_phone_number, language, student):
         )
     )
     if not has_successful_result:
+        send_navigation_buttons(to_phone_number, language, "exam")
         return
 
     try:
@@ -2828,6 +3034,7 @@ def send_results_exams_flow(to_phone_number, language, student):
                 "hi": "Result PDF - पी.एस. पब्लिक स्कूल",
             }[language],
         )
+        send_navigation_buttons(to_phone_number, language, "exam")
     except Exception as exc:
         logger.exception("Failed to create/send result PDF: %s", exc)
         send_text_message(
@@ -2837,6 +3044,7 @@ def send_results_exams_flow(to_phone_number, language, student):
                 "hi": "Text result भेज दिया गया है, लेकिन PDF अभी generate नहीं हो पाया।",
             }[language],
         )
+        send_navigation_buttons(to_phone_number, language, "exam")
 
 
 def set_language_and_start(to_phone_number, language):
@@ -2851,6 +3059,26 @@ def set_language_and_start(to_phone_number, language):
 
 def reply_to_user(to_phone_number, message_text):
     normalized_text = normalize_message(message_text)
+
+    language = LANGUAGE_BY_USER.get(to_phone_number, "en")
+
+    if normalized_text == "nav_main_menu":
+        send_service_list_message(to_phone_number, language)
+        return
+
+    if normalized_text == "nav_previous_menu":
+        previous_menu = MENU_CONTEXT_BY_USER.get(to_phone_number, {}).get("previous", "main")
+        if previous_menu == "academic":
+            send_other_services_list_message(to_phone_number, language)
+        elif previous_menu == "exam":
+            send_exam_services_list_message(to_phone_number, language)
+        elif previous_menu == "admission":
+            send_admission_services_list_message(to_phone_number, language)
+        elif previous_menu == "certificates":
+            send_certificate_list_message(to_phone_number, language)
+        else:
+            send_service_list_message(to_phone_number, language)
+        return
 
     if normalized_text in {"language_en", "english"}:
         set_language_and_start(to_phone_number, "en")
@@ -2872,6 +3100,27 @@ def reply_to_user(to_phone_number, message_text):
 
     if service_id in ACTION_REPLIES:
         send_text_message(to_phone_number, ACTION_REPLIES[service_id][language])
+        send_navigation_buttons(to_phone_number, language, "main")
+        return
+
+    if service_id == "admission_services":
+        send_admission_services_list_message(to_phone_number, language)
+        return
+
+    if service_id == "other_services":
+        if to_phone_number not in STUDENT_AUTH_BY_USER:
+            start_academic_services_login_flow(to_phone_number, language, "show_academic_services")
+            return
+
+        send_other_services_list_message(to_phone_number, language)
+        return
+
+    if service_id == "exam_services":
+        if to_phone_number not in STUDENT_AUTH_BY_USER:
+            start_academic_services_login_flow(to_phone_number, language, "show_exam_services")
+            return
+
+        send_exam_services_list_message(to_phone_number, language)
         return
 
     if service_id == "admission_enquiry":
@@ -2884,14 +3133,6 @@ def reply_to_user(to_phone_number, message_text):
 
     if service_id == "transport_facility":
         send_transport_facility_flow(to_phone_number, language)
-        return
-
-    if service_id == "other_services":
-        if to_phone_number not in STUDENT_AUTH_BY_USER:
-            start_other_services_login_flow(to_phone_number, language)
-            return
-
-        send_other_services_list_message(to_phone_number, language)
         return
 
     if service_id == "change_language":
@@ -2974,10 +3215,12 @@ def reply_to_user(to_phone_number, message_text):
             to_phone_number,
             OTHER_SERVICE_CATEGORIES[other_category_id]["reply"][language],
         )
+        send_navigation_buttons(to_phone_number, language, "academic")
         return
 
     if service_id in SERVICES:
         send_text_message(to_phone_number, SERVICES[service_id]["reply"][language])
+        send_navigation_buttons(to_phone_number, language, "main")
         return
 
     send_intro_and_services(to_phone_number, language)
