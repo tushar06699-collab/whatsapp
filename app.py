@@ -44,6 +44,7 @@ logger = logging.getLogger(__name__)
 
 RESULTS_DIR = os.path.join(app.static_folder, "results")
 os.makedirs(RESULTS_DIR, exist_ok=True)
+SCHOOL_LOGO_PATH = os.path.join(app.static_folder, "school-logo.png")
 
 # In-memory language preference. For Render's normal single web instance this is enough.
 # For multiple workers/instances, move this to a small database or Redis.
@@ -860,6 +861,7 @@ def get_result_status_text(key, language):
 def fetch_student_results(student, language):
     exam_base_url = get_exam_backend_base_url()
     profile = fetch_student_profile(student)
+    profile = enrich_student_with_backend_record(profile)
 
     session = str(profile.get("session") or "").replace("-", "_")
     class_name = profile.get("class_name") or profile.get("class") or ""
@@ -1233,12 +1235,23 @@ def draw_marksheet_pdf(path, result_data):
         pdf.setLineWidth(1.6)
         pdf.rect(13 * mm, 12 * mm, width - 26 * mm, height - 24 * mm)
 
-        pdf.setFillColor(colors.HexColor("#0b2f5b"))
-        pdf.circle(30 * mm, height - 28 * mm, 12 * mm, stroke=1, fill=0)
-        pdf.setFont("Helvetica-Bold", 14)
-        pdf.drawCentredString(30 * mm, height - 30 * mm, "PS")
-        pdf.setFont("Helvetica", 6)
-        pdf.drawCentredString(30 * mm, height - 37 * mm, "PUBLIC SCHOOL")
+        if os.path.exists(SCHOOL_LOGO_PATH):
+            pdf.drawImage(
+                SCHOOL_LOGO_PATH,
+                19 * mm,
+                height - 42 * mm,
+                26 * mm,
+                26 * mm,
+                preserveAspectRatio=True,
+                mask="auto",
+            )
+        else:
+            pdf.setFillColor(colors.HexColor("#0b2f5b"))
+            pdf.circle(30 * mm, height - 28 * mm, 12 * mm, stroke=1, fill=0)
+            pdf.setFont("Helvetica-Bold", 14)
+            pdf.drawCentredString(30 * mm, height - 30 * mm, "PS")
+            pdf.setFont("Helvetica", 6)
+            pdf.drawCentredString(30 * mm, height - 37 * mm, "PUBLIC SCHOOL")
 
         pdf.setFont("Helvetica-Bold", 24)
         pdf.drawCentredString(width / 2, height - 25 * mm, "P.S. PUBLIC SCHOOL")
@@ -1257,7 +1270,8 @@ def draw_marksheet_pdf(path, result_data):
         pdf.rect(x, y, 30 * mm, 38 * mm)
         if not photo_url:
             pdf.setFont("Helvetica", 8)
-            pdf.drawCentredString(x + 15 * mm, y + 19 * mm, "PHOTO")
+            pdf.drawCentredString(x + 15 * mm, y + 21 * mm, "PHOTO")
+            pdf.drawCentredString(x + 15 * mm, y + 16 * mm, "ON RECORD")
             return
         try:
             response = requests.get(photo_url, timeout=10)
@@ -1724,13 +1738,102 @@ def write_professional_certificate_pdf(path, student, certificate_type):
         pdf_file.write("".join(pdf_parts).encode("latin-1", errors="replace"))
 
 
+def draw_certificate_pdf(path, student, certificate_type):
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.pdfgen import canvas
+    from reportlab.platypus import Paragraph
+
+    content = certificate_content(student, certificate_type)
+    width, height = A4
+    pdf = canvas.Canvas(path, pagesize=A4)
+    navy = colors.HexColor("#0b2f5b")
+
+    pdf.setStrokeColor(navy)
+    pdf.setLineWidth(1.6)
+    pdf.rect(14 * mm, 12 * mm, width - 28 * mm, height - 24 * mm)
+
+    if os.path.exists(SCHOOL_LOGO_PATH):
+        pdf.drawImage(
+            SCHOOL_LOGO_PATH,
+            20 * mm,
+            height - 43 * mm,
+            27 * mm,
+            27 * mm,
+            preserveAspectRatio=True,
+            mask="auto",
+        )
+
+    pdf.setFillColor(navy)
+    pdf.setFont("Helvetica-Bold", 25)
+    pdf.drawCentredString(width / 2, height - 25 * mm, "P.S. PUBLIC SCHOOL")
+    pdf.setFont("Helvetica", 11)
+    pdf.drawCentredString(width / 2, height - 32 * mm, "Ganaur Road Bhurri (Sonipat) - 131101")
+    pdf.setFont("Helvetica", 8)
+    pdf.drawCentredString(width / 2, height - 38 * mm, "Phone: +91 94162 93661 | Email: psbhurri@gmail.com | Website: pspublicschool.com")
+    pdf.line(23 * mm, height - 47 * mm, width - 23 * mm, height - 47 * mm)
+
+    pdf.setFont("Helvetica-Bold", 15)
+    pdf.drawCentredString(width / 2, height - 60 * mm, content["title"])
+    pdf.line(width / 2 - 35 * mm, height - 63 * mm, width / 2 + 35 * mm, height - 63 * mm)
+
+    y = height - 80 * mm
+    pdf.setFont("Helvetica", 10.5)
+    pdf.drawString(24 * mm, y, f"Date: {content['date']}")
+    pdf.drawRightString(width - 24 * mm, y, f"Ref. No.: PSPS/{content['admission_no']}/{datetime.utcnow().strftime('%Y%m%d')}")
+    y -= 8 * mm
+    pdf.drawString(24 * mm, y, f"Admission No.: {content['admission_no']}")
+    y -= 16 * mm
+
+    body_style = ParagraphStyle(
+        "certificate_body",
+        fontName="Helvetica",
+        fontSize=11,
+        leading=18,
+        textColor=colors.black,
+        alignment=4,
+    )
+    for paragraph in content["paragraphs"]:
+        p = Paragraph(paragraph, body_style)
+        _, ph = p.wrap(width - 48 * mm, 120 * mm)
+        p.drawOn(pdf, 24 * mm, y - ph)
+        y -= ph + 8 * mm
+
+    note_style = ParagraphStyle("note", fontName="Helvetica", fontSize=9, leading=13)
+    note = Paragraph(
+        "Note: This digitally generated certificate is based on school records. "
+        "For signed/stamped hard copy, please contact the school office.",
+        note_style,
+    )
+    _, nh = note.wrap(width - 48 * mm, 40 * mm)
+    note.drawOn(pdf, 24 * mm, max(y - nh, 78 * mm))
+
+    pdf.setStrokeColor(navy)
+    pdf.line(width - 70 * mm, 45 * mm, width - 24 * mm, 45 * mm)
+    pdf.setFillColor(colors.black)
+    pdf.setFont("Helvetica-Bold", 11)
+    pdf.drawString(width - 65 * mm, 50 * mm, "Naveen Kumar")
+    pdf.setFont("Helvetica", 9)
+    pdf.drawString(width - 60 * mm, 40 * mm, "Principal")
+    pdf.drawString(width - 80 * mm, 35 * mm, "Digitally signed by Naveen Kumar, Principal")
+
+    pdf.showPage()
+    pdf.save()
+
+
 def create_certificate_pdf(student, certificate_type):
     admission_no = clean_certificate_value(first_present(student, ["admission_no", "admissionNo"]), "student")
     safe_admission = re.sub(r"[^A-Za-z0-9_-]", "_", admission_no)
     safe_type = re.sub(r"[^A-Za-z0-9_-]", "_", certificate_type)
     filename = f"{safe_type}_certificate_{safe_admission}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.pdf"
     path = os.path.join(RESULTS_DIR, filename)
-    write_professional_certificate_pdf(path, student, certificate_type)
+    try:
+        draw_certificate_pdf(path, student, certificate_type)
+    except Exception as exc:
+        logger.exception("ReportLab certificate PDF failed, using raw PDF fallback: %s", exc)
+        write_professional_certificate_pdf(path, student, certificate_type)
     return filename
 
 
@@ -2420,6 +2523,7 @@ def fetch_student_details(username, password):
         return {"ok": False, "reason": "server_error"}
 
     student = fetch_student_profile(student)
+    student = enrich_student_with_backend_record(student)
     return {"ok": True, "student": student}
 
 
@@ -2525,6 +2629,44 @@ def get_student_photo_url(student):
         return f"{student_backend_url}{photo_url}"
 
     return f"{student_backend_url}/{photo_url}"
+
+
+def enrich_student_with_backend_record(student):
+    admission_no = str(student.get("admission_no") or "").strip()
+    if not admission_no:
+        return student
+
+    current_photo = str(student.get("photo_url") or "").strip()
+    current_dob = str(student.get("dob") or "").strip()
+    if current_photo and current_dob:
+        return student
+
+    student_backend_url = (STUDENT_BACKEND_URL or DEFAULT_STUDENT_BACKEND_URL).rstrip("/")
+    try:
+        response = requests.get(f"{student_backend_url}/students", timeout=20)
+        response.raise_for_status()
+        data = response.json()
+    except Exception as exc:
+        logger.warning("Unable to enrich student from student backend: %s", exc)
+        return student
+
+    students = data.get("students") if isinstance(data, dict) else data
+    if not isinstance(students, list):
+        return student
+
+    for row in students:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("admission_no") or "").strip() == admission_no:
+            merged = dict(row)
+            merged.update({key: value for key, value in student.items() if value not in {None, ""}})
+            if not merged.get("photo_url") and row.get("photo_url"):
+                merged["photo_url"] = row.get("photo_url")
+            if not merged.get("dob") and row.get("dob"):
+                merged["dob"] = row.get("dob")
+            return merged
+
+    return student
 
 
 def send_student_photo_if_available(to_phone_number, student, language):
