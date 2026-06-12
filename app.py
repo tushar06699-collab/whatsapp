@@ -819,6 +819,26 @@ def get_result_status_text(key, language):
             "en": "Result is not released for your profile yet.",
             "hi": "आपके profile के लिए result अभी release नहीं हुआ है।",
         },
+        "class_result_not_released": {
+            "en": (
+                "Result warning\n\n"
+                "The result for your class has not been released yet. Please wait for the official result announcement from the school."
+            ),
+            "hi": (
+                "Result warning\n\n"
+                "आपकी class का result अभी release नहीं हुआ है। कृपया स्कूल की official result announcement का इंतजार करें।"
+            ),
+        },
+        "student_unauthorized": {
+            "en": (
+                "Result warning\n\n"
+                "The result for your class is released, but this student is not authorized to view the result right now. Please contact the school office."
+            ),
+            "hi": (
+                "Result warning\n\n"
+                "आपकी class का result release हो चुका है, लेकिन यह student अभी result देखने के लिए authorized नहीं है। कृपया school office से संपर्क करें।"
+            ),
+        },
         "roll_not_released": {
             "en": "Roll number is not released for your profile.",
             "hi": "आपके profile के लिए roll number release नहीं हुआ है।",
@@ -839,12 +859,6 @@ def fetch_student_results(student, language):
     exam_base_url = get_exam_backend_base_url()
     profile = fetch_student_profile(student)
 
-    if profile.get("eligible") is False:
-        return {"ok": True, "status": "not_eligible", "profile": profile, "exams": []}
-
-    if profile.get("release_result") is False:
-        return {"ok": True, "status": "not_released", "profile": profile, "exams": []}
-
     session = str(profile.get("session") or "").replace("-", "_")
     class_name = profile.get("class_name") or profile.get("class") or ""
     roll = str(profile.get("roll") or profile.get("rollno") or "").strip()
@@ -858,9 +872,6 @@ def fetch_student_results(student, language):
     }
     student_ids = {item for item in student_ids if item}
 
-    if not candidate_rolls:
-        return {"ok": True, "status": "roll_not_released", "profile": profile, "exams": []}
-
     try:
         exams_data = fetch_json_url(build_url(exam_base_url, "/exam/list-all"))
     except Exception as exc:
@@ -869,6 +880,8 @@ def fetch_student_results(student, language):
 
     exams = exams_data.get("exams", []) if isinstance(exams_data, dict) else []
     result_exams = []
+    class_exam_found = False
+    class_result_released = False
 
     for exam in exams:
         exam_name = str(exam.get("exam_name") or "").strip()
@@ -877,6 +890,7 @@ def fetch_student_results(student, language):
             continue
         if session and exam_session and exam_session != session:
             continue
+        class_exam_found = True
 
         try:
             status_data = fetch_json_url(
@@ -898,6 +912,14 @@ def fetch_student_results(student, language):
         if not status_data.get("success") or not status_data.get("published"):
             result_exams.append({"exam_name": exam_name, "status": "coming_soon"})
             continue
+
+        class_result_released = True
+
+        if profile.get("eligible") is False or profile.get("release_result") is False:
+            return {"ok": True, "status": "student_unauthorized", "profile": profile, "exams": []}
+
+        if not candidate_rolls:
+            return {"ok": True, "status": "roll_not_released", "profile": profile, "exams": []}
 
         try:
             marks_data = fetch_json_url(
@@ -1026,6 +1048,9 @@ def fetch_student_results(student, language):
                 "result": "FAIL" if failed else "PASS",
             }
         )
+
+    if class_exam_found and not class_result_released:
+        return {"ok": True, "status": "class_result_not_released", "profile": profile, "exams": result_exams}
 
     if not result_exams:
         return {"ok": True, "status": "no_result", "profile": profile, "exams": []}
