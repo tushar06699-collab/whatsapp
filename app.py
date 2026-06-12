@@ -1219,6 +1219,7 @@ def draw_marksheet_pdf(path, result_data):
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
+    from reportlab.lib.utils import ImageReader
     from reportlab.pdfgen import canvas
     from reportlab.platypus import Paragraph, Table, TableStyle
 
@@ -1276,7 +1277,7 @@ def draw_marksheet_pdf(path, result_data):
         try:
             response = requests.get(photo_url, timeout=10)
             response.raise_for_status()
-            image_data = BytesIO(response.content)
+            image_data = ImageReader(BytesIO(response.content))
             pdf.drawImage(image_data, x + 1.5 * mm, y + 1.5 * mm, 27 * mm, 35 * mm, preserveAspectRatio=True, anchor="c")
         except Exception as exc:
             logger.warning("Unable to draw student photo in marksheet PDF: %s", exc)
