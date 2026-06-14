@@ -75,9 +75,9 @@ SCHOOL_INTRO = {
 
 SERVICES = {
     "admission_services": {
-        "title": {"en": "Admission Services", "hi": "प्रवेश सेवाएं"},
+        "title": {"en": "Admission & Information", "hi": "प्रवेश और जानकारी"},
         "description": {
-            "en": "Admission, fee, transport, contact",
+            "en": "Admission, fees, transport, contact",
             "hi": "प्रवेश, फीस, परिवहन, संपर्क",
         },
         "reply": {
@@ -108,9 +108,9 @@ SERVICES = {
         },
     },
     "transport_facility": {
-        "title": {"en": "Transport Facility", "hi": "परिवहन सुविधा"},
+        "title": {"en": "Transport Routes", "hi": "परिवहन रूट"},
         "description": {
-            "en": "Bus routes and availability",
+            "en": "Routes and monthly transport fee",
             "hi": "बस रूट और उपलब्धता",
         },
         "reply": {
@@ -141,16 +141,82 @@ SERVICES = {
             ),
         },
     },
+    "school_timing_public": {
+        "title": {"en": "School Timings", "hi": "स्कूल समय"},
+        "description": {"en": "School and office hours", "hi": "स्कूल और कार्यालय समय"},
+        "reply": {
+            "en": (
+                "School Timings\n\n"
+                "For current school timing, office hours, holiday updates, or special schedule changes, "
+                "please contact the school office before visiting.\n\n"
+                "Call: +91 94162 93661\nWhatsApp: +91 94168 38604"
+            ),
+            "hi": (
+                "स्कूल समय\n\n"
+                "वर्तमान स्कूल समय, कार्यालय समय, छुट्टी अपडेट या विशेष समय बदलाव की जानकारी के लिए "
+                "कृपया आने से पहले स्कूल कार्यालय से संपर्क करें।\n\n"
+                "फोन: +91 94162 93661\nWhatsApp: +91 94168 38604"
+            ),
+        },
+    },
+    "holiday_list": {
+        "title": {"en": "Holiday List", "hi": "छुट्टी सूची"},
+        "description": {"en": "School holidays and notices", "hi": "स्कूल छुट्टियां और सूचना"},
+        "reply": {
+            "en": "Holiday List\n\nPlease contact the school office for the latest holiday list and official notices.",
+            "hi": "छुट्टी सूची\n\nनई छुट्टी सूची और official notices के लिए कृपया स्कूल कार्यालय से संपर्क करें।",
+        },
+    },
+    "school_facilities": {
+        "title": {"en": "School Facilities", "hi": "स्कूल सुविधाएं"},
+        "description": {"en": "Campus, safety, activities", "hi": "कैंपस, सुरक्षा, गतिविधियां"},
+        "reply": {
+            "en": (
+                "School Facilities\n\n"
+                "- Safe and disciplined campus\n"
+                "- Activity-based learning support\n"
+                "- Transport on selected routes\n"
+                "- Parent communication and student support\n"
+                "- Focus on academics, values, and confidence building"
+            ),
+            "hi": (
+                "स्कूल सुविधाएं\n\n"
+                "- सुरक्षित और अनुशासित campus\n"
+                "- Activity-based learning support\n"
+                "- चयनित routes पर transport\n"
+                "- Parent communication और student support\n"
+                "- पढ़ाई, संस्कार और confidence building पर ध्यान"
+            ),
+        },
+    },
+    "prospectus": {
+        "title": {"en": "Prospectus", "hi": "प्रॉस्पेक्टस"},
+        "description": {"en": "School information and admission guide", "hi": "स्कूल जानकारी और प्रवेश गाइड"},
+        "reply": {
+            "en": (
+                "Prospectus\n\n"
+                "For the latest school prospectus, admission details, facilities, and fee guidance, "
+                "please contact the admission office.\n\n"
+                "Call: +91 94162 93661\nWebsite: pspublicschool.com"
+            ),
+            "hi": (
+                "प्रॉस्पेक्टस\n\n"
+                "Latest school prospectus, admission details, facilities और fee guidance के लिए "
+                "कृपया admission office से संपर्क करें।\n\n"
+                "फोन: +91 94162 93661\nWebsite: pspublicschool.com"
+            ),
+        },
+    },
     "other_services": {
-        "title": {"en": "Academic Services", "hi": "शैक्षणिक सेवाएं"},
+        "title": {"en": "Student Services", "hi": "विद्यार्थी सेवाएं"},
         "description": {
-            "en": "Student Details,Results, certificates, etc.",
-            "hi": "किताबें, यूनिफॉर्म, प्रमाण पत्र",
+            "en": "Accounts, fee, certificates",
+            "hi": "फीस, रसीद, लाइब्रेरी, प्रमाण पत्र",
         },
         "reply": {
             "en": (
-                "Academic Services\n\n"
-                "For Student Details, Result, certificates, or general support, "
+                "Student Services & Accounts\n\n"
+                "For fee details, receipts, certificates, or account support, "
                 "please contact the school office."
             ),
             "hi": (
@@ -161,13 +227,13 @@ SERVICES = {
         },
     },
     "exam_services": {
-        "title": {"en": "Exam Services", "hi": "परीक्षा सेवाएं"},
+        "title": {"en": "Academic Services", "hi": "शैक्षणिक सेवाएं"},
         "description": {
-            "en": "Results, exams, report card",
+            "en": "Attendance, homework, results, exams",
             "hi": "रिजल्ट, परीक्षा, रिपोर्ट कार्ड",
         },
         "reply": {
-            "en": "Exam Services",
+            "en": "Academic Services",
             "hi": "परीक्षा सेवाएं",
         },
     },
@@ -185,6 +251,110 @@ SERVICES = {
 }
 
 OTHER_SERVICE_CATEGORIES = {
+    "fee_details": {
+        "title": {"en": "Fee Details", "hi": "फीस विवरण"},
+        "description": {"en": "Student fee summary", "hi": "विद्यार्थी फीस सारांश"},
+        "reply": {
+            "en": "Fee Details\n\nFee detail integration is not available on WhatsApp yet. Please contact the accounts office for student-wise fee details.",
+            "hi": "फीस विवरण\n\nWhatsApp पर student-wise fee detail अभी उपलब्ध नहीं है। कृपया accounts office से संपर्क करें।",
+        },
+    },
+    "fee_receipt": {
+        "title": {"en": "Fee Receipt", "hi": "फीस रसीद"},
+        "description": {"en": "Receipt and payment proof", "hi": "रसीद और payment proof"},
+        "reply": {
+            "en": "Fee Receipt\n\nFor fee receipt or payment proof, please contact the school accounts office.",
+            "hi": "फीस रसीद\n\nFee receipt या payment proof के लिए कृपया school accounts office से संपर्क करें।",
+        },
+    },
+    "transport_details": {
+        "title": {"en": "Transport Details", "hi": "परिवहन विवरण"},
+        "description": {"en": "Student route and bus fee", "hi": "Student route और bus fee"},
+        "reply": {
+            "en": "Transport Details\n\nFor student-specific transport route, pickup point, timing, and bus fee, please contact the transport/accounts office.",
+            "hi": "परिवहन विवरण\n\nStudent-specific route, pickup point, timing और bus fee के लिए transport/accounts office से संपर्क करें।",
+        },
+    },
+    "library_records": {
+        "title": {"en": "Library Records", "hi": "लाइब्रेरी रिकॉर्ड"},
+        "description": {"en": "Books issued and return status", "hi": "Books issue और return status"},
+        "reply": {
+            "en": "Library Records\n\nLibrary record integration is not available on WhatsApp yet. Please contact the library/school office.",
+            "hi": "लाइब्रेरी रिकॉर्ड\n\nWhatsApp पर library record अभी उपलब्ध नहीं है। कृपया library/school office से संपर्क करें।",
+        },
+    },
+    "fine_details": {
+        "title": {"en": "Fine Details", "hi": "जुर्माना विवरण"},
+        "description": {"en": "Fine or pending dues", "hi": "Fine या pending dues"},
+        "reply": {
+            "en": "Fine Details\n\nFor fine details or pending dues, please contact the school accounts office.",
+            "hi": "जुर्माना विवरण\n\nFine details या pending dues के लिए कृपया school accounts office से संपर्क करें।",
+        },
+    },
+    "payment_history": {
+        "title": {"en": "Payment History", "hi": "Payment History"},
+        "description": {"en": "Previous payments and dues", "hi": "पुरानी payment और dues"},
+        "reply": {
+            "en": "Payment History\n\nPayment history integration is not available on WhatsApp yet. Please contact the accounts office for a verified statement.",
+            "hi": "Payment History\n\nWhatsApp पर payment history अभी उपलब्ध नहीं है। Verified statement के लिए accounts office से संपर्क करें।",
+        },
+    },
+    "attendance": {
+        "title": {"en": "Attendance", "hi": "उपस्थिति"},
+        "description": {"en": "Student attendance status", "hi": "Student attendance status"},
+        "reply": {
+            "en": "Attendance\n\nAttendance view is not available on WhatsApp yet. Please contact the class teacher or school office.",
+            "hi": "उपस्थिति\n\nWhatsApp पर attendance view अभी उपलब्ध नहीं है। कृपया class teacher या school office से संपर्क करें।",
+        },
+    },
+    "homework": {
+        "title": {"en": "Homework", "hi": "होमवर्क"},
+        "description": {"en": "Daily work and homework", "hi": "Daily work और homework"},
+        "reply": {
+            "en": "Homework\n\nFor homework and daily work, please contact the concerned class teacher.",
+            "hi": "होमवर्क\n\nHomework और daily work के लिए कृपया संबंधित class teacher से संपर्क करें।",
+        },
+    },
+    "exam_schedule": {
+        "title": {"en": "Exam Schedule", "hi": "परीक्षा समय-सारणी"},
+        "description": {"en": "Datesheet and exam timing", "hi": "Datesheet और exam timing"},
+        "reply": {
+            "en": "Exam Schedule\n\nFor the latest exam schedule/datesheet, please contact the school office or class teacher.",
+            "hi": "परीक्षा समय-सारणी\n\nLatest exam schedule/datesheet के लिए school office या class teacher से संपर्क करें।",
+        },
+    },
+    "syllabus": {
+        "title": {"en": "Syllabus", "hi": "सिलेबस"},
+        "description": {"en": "Class-wise syllabus", "hi": "Class-wise syllabus"},
+        "reply": {
+            "en": "Syllabus\n\nFor class-wise syllabus, please contact the concerned subject teacher or school office.",
+            "hi": "सिलेबस\n\nClass-wise syllabus के लिए concerned subject teacher या school office से संपर्क करें।",
+        },
+    },
+    "assignments": {
+        "title": {"en": "Assignments", "hi": "असाइनमेंट"},
+        "description": {"en": "Assignments and projects", "hi": "Assignments और projects"},
+        "reply": {
+            "en": "Assignments\n\nFor assignments and project work, please contact the concerned class/subject teacher.",
+            "hi": "असाइनमेंट\n\nAssignments और project work के लिए concerned class/subject teacher से संपर्क करें।",
+        },
+    },
+    "ptm_schedule": {
+        "title": {"en": "PTM Schedule", "hi": "PTM समय"},
+        "description": {"en": "Parent teacher meeting", "hi": "Parent teacher meeting"},
+        "reply": {
+            "en": "PTM Schedule\n\nFor PTM dates and timings, please contact the school office or class teacher.",
+            "hi": "PTM समय\n\nPTM dates और timings के लिए school office या class teacher से संपर्क करें।",
+        },
+    },
+    "teacher_remarks": {
+        "title": {"en": "Teacher Remarks", "hi": "शिक्षक टिप्पणी"},
+        "description": {"en": "Teacher feedback", "hi": "Teacher feedback"},
+        "reply": {
+            "en": "Teacher Remarks\n\nFor teacher remarks or performance feedback, please contact the concerned class teacher.",
+            "hi": "शिक्षक टिप्पणी\n\nTeacher remarks या performance feedback के लिए concerned class teacher से संपर्क करें।",
+        },
+    },
     "academic_support": {
         "title": {"en": "Academic Support", "hi": "शैक्षणिक सहायता"},
         "description": {
@@ -353,19 +523,32 @@ ADMISSION_SERVICE_IDS = [
     "admission_enquiry",
     "fee_structure",
     "transport_facility",
+    "school_timing_public",
+    "holiday_list",
     "contact_school",
+    "school_facilities",
+    "prospectus",
 ]
 
 ACADEMIC_CATEGORY_IDS = [
-    "student_details",
+    "fee_details",
+    "fee_receipt",
+    "transport_details",
+    "library_records",
+    "fine_details",
     "certificates",
-    "academic_support",
-    "uniform_books",
-    "school_timing",
+    "payment_history",
 ]
 
 EXAM_CATEGORY_IDS = [
+    "attendance",
+    "homework",
     "results_exams",
+    "exam_schedule",
+    "syllabus",
+    "assignments",
+    "ptm_schedule",
+    "teacher_remarks",
 ]
 
 ACTION_REPLIES = {
@@ -2115,7 +2298,7 @@ def send_service_list_message(to_phone_number, language):
             },
             "body": {
                 "text": {
-                    "en": "Please tap below and select the service you need.",
+                    "en": "Please select a service:",
                     "hi": "कृपया नीचे टैप करके अपनी जरूरत की सेवा चुनें।",
                 }[language]
             },
@@ -2129,7 +2312,7 @@ def send_service_list_message(to_phone_number, language):
                 "button": {"en": "View Services", "hi": "सेवाएं देखें"}[language],
                 "sections": [
                     {
-                        "title": {"en": "School Services", "hi": "स्कूल सेवाएं"}[language],
+                        "title": {"en": "Main Menu", "hi": "मुख्य मेनू"}[language],
                         "rows": rows,
                     }
                 ],
@@ -2158,11 +2341,11 @@ def send_admission_services_list_message(to_phone_number, language):
             "type": "list",
             "header": {
                 "type": "text",
-                "text": {"en": "Admission Services", "hi": "प्रवेश सेवाएं"}[language],
+                "text": {"en": "Admission & Information", "hi": "प्रवेश और जानकारी"}[language],
             },
             "body": {
                 "text": {
-                    "en": "Please select an admission-related service.",
+                    "en": "Please select an admission or school information service.",
                     "hi": "कृपया प्रवेश से जुड़ी सेवा चुनें।",
                 }[language]
             },
@@ -2171,7 +2354,7 @@ def send_admission_services_list_message(to_phone_number, language):
                 "button": {"en": "View Admission", "hi": "प्रवेश देखें"}[language],
                 "sections": [
                     {
-                        "title": {"en": "Admission Services", "hi": "प्रवेश सेवाएं"}[language],
+                        "title": {"en": "Admission & Information", "hi": "प्रवेश और जानकारी"}[language],
                         "rows": rows,
                     }
                 ],
@@ -2201,11 +2384,11 @@ def send_other_services_list_message(to_phone_number, language):
             "type": "list",
             "header": {
                 "type": "text",
-        "text": {"en": "Academic Services", "hi": "शैक्षणिक सेवाएं"}[language],
+                "text": {"en": "Student Services & Accounts", "hi": "विद्यार्थी सेवाएं और खाते"}[language],
             },
             "body": {
                 "text": {
-                    "en": "Please select the category you need help with.",
+                    "en": "Please select a student service or accounts option.",
                     "hi": "कृपया वह श्रेणी चुनें जिसमें आपको सहायता चाहिए।",
                 }[language]
             },
@@ -2216,10 +2399,10 @@ def send_other_services_list_message(to_phone_number, language):
                 }[language]
             },
             "action": {
-                "button": {"en": "View Categories", "hi": "श्रेणी देखें"}[language],
+                "button": {"en": "View Services", "hi": "सेवाएं देखें"}[language],
                 "sections": [
                     {
-                        "title": {"en": "Support Categories", "hi": "सहायता श्रेणियां"}[language],
+                        "title": {"en": "Student Services", "hi": "विद्यार्थी सेवाएं"}[language],
                         "rows": rows,
                     }
                 ],
@@ -2248,20 +2431,20 @@ def send_exam_services_list_message(to_phone_number, language):
             "type": "list",
             "header": {
                 "type": "text",
-                "text": {"en": "Exam Services", "hi": "परीक्षा सेवाएं"}[language],
+                "text": {"en": "Academic Services", "hi": "शैक्षणिक सेवाएं"}[language],
             },
             "body": {
                 "text": {
-                    "en": "Please select the exam service you need.",
+                    "en": "Please select an academic service.",
                     "hi": "कृपया परीक्षा से जुड़ी सेवा चुनें।",
                 }[language]
             },
             "footer": {"text": "P.S. Public School"},
             "action": {
-                "button": {"en": "View Exam", "hi": "परीक्षा देखें"}[language],
+                "button": {"en": "View Academic", "hi": "शैक्षणिक देखें"}[language],
                 "sections": [
                     {
-                        "title": {"en": "Exam Services", "hi": "परीक्षा सेवाएं"}[language],
+                        "title": {"en": "Academic Services", "hi": "शैक्षणिक सेवाएं"}[language],
                         "rows": rows,
                     }
                 ],
@@ -2950,8 +3133,11 @@ def process_student_details_login(to_phone_number, username, password, language,
         admission_no = first_present(result["student"], ["admission_no", "admissionNo"])
         class_name = first_present(result["student"], ["class_name", "class"])
         service_label = {
-            "show_exam_services": {"en": "Exam Services", "hi": "Exam Services"},
-        }.get(after_login, {"en": "Academic Services", "hi": "Academic Services"})[language]
+            "show_exam_services": {"en": "Academic Services", "hi": "Academic Services"},
+        }.get(
+            after_login,
+            {"en": "Student Services & Accounts", "hi": "Student Services & Accounts"},
+        )[language]
         send_text_message(
             to_phone_number,
             {
@@ -3215,7 +3401,8 @@ def reply_to_user(to_phone_number, message_text):
             to_phone_number,
             OTHER_SERVICE_CATEGORIES[other_category_id]["reply"][language],
         )
-        send_navigation_buttons(to_phone_number, language, "academic")
+        previous_menu = "exam" if other_category_id in EXAM_CATEGORY_IDS else "academic"
+        send_navigation_buttons(to_phone_number, language, previous_menu)
         return
 
     if service_id in SERVICES:
