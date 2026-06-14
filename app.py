@@ -18,6 +18,10 @@ PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 GRAPH_API_VERSION = os.getenv("GRAPH_API_VERSION", "v20.0")
 SCHOOL_IMAGE_URL = os.getenv("SCHOOL_IMAGE_URL", "").strip()
 SERVICE_MENU_DELAY_SECONDS = float(os.getenv("SERVICE_MENU_DELAY_SECONDS", "3"))
+NAVIGATION_DELAY_SECONDS = float(os.getenv("NAVIGATION_DELAY_SECONDS", "2"))
+MEDIA_NAVIGATION_DELAY_SECONDS = float(os.getenv("MEDIA_NAVIGATION_DELAY_SECONDS", "4"))
+STUDENT_AUTH_TIMEOUT_SECONDS = int(os.getenv("STUDENT_AUTH_TIMEOUT_SECONDS", "86400"))
+STUDENT_AUTH_WARNING_SECONDS = int(os.getenv("STUDENT_AUTH_WARNING_SECONDS", "300"))
 ADMISSION_FORM_PDF_URL = os.getenv("ADMISSION_FORM_PDF_URL", "").strip()
 ONLINE_ADMISSION_FORM_URL = os.getenv(
     "ONLINE_ADMISSION_FORM_URL",
@@ -63,6 +67,7 @@ SCHOOL_LOGO_PATH = os.path.join(app.static_folder, "school-logo.png")
 LANGUAGE_BY_USER = {}
 STUDENT_DETAIL_SESSIONS = {}
 STUDENT_AUTH_BY_USER = {}
+STUDENT_AUTH_TIMERS_BY_USER = {}
 MENU_CONTEXT_BY_USER = {}
 
 LANGUAGE_LABELS = {
@@ -401,7 +406,7 @@ OTHER_SERVICE_CATEGORIES = {
     "student_details": {
         "title": {"en": "Student Details", "hi": "विद्यार्थी विवरण"},
         "description": {
-            "en": "Update student or parent information",
+            "en": "Profile, photo and ID card",
             "hi": "विद्यार्थी/अभिभावक जानकारी",
         },
         "reply": {
@@ -553,6 +558,7 @@ ADMISSION_SERVICE_IDS = [
 ]
 
 ACADEMIC_CATEGORY_IDS = [
+    "student_details",
     "fee_details",
     "fee_receipt",
     "transport_details",
@@ -1060,6 +1066,7 @@ def send_school_facilities_flow(to_phone_number, language):
     send_text_message(to_phone_number, SERVICES["school_facilities"]["reply"][language])
 
     sent_any_image = False
+    sent_image_count = 0
     for title, filename in FACILITY_IMAGE_FILES:
         if not static_file_exists(filename):
             continue
@@ -1074,11 +1081,13 @@ def send_school_facilities_flow(to_phone_number, language):
         }[language]
         if send_image_message(to_phone_number, image_url, caption):
             sent_any_image = True
+            sent_image_count += 1
 
     if not sent_any_image:
         logger.info("No facility images found in static/facilities to send.")
 
-    send_navigation_buttons(to_phone_number, language, "admission")
+    delay = MEDIA_NAVIGATION_DELAY_SECONDS + (sent_image_count * 1.5)
+    send_navigation_buttons_later(to_phone_number, language, "admission", delay)
 
 
 def send_prospectus_flow(to_phone_number, language):
@@ -1113,7 +1122,7 @@ def send_prospectus_flow(to_phone_number, language):
             }[language],
         )
 
-    send_navigation_buttons(to_phone_number, language, "admission")
+    send_navigation_buttons_later(to_phone_number, language, "admission", MEDIA_NAVIGATION_DELAY_SECONDS)
 
 
 def send_holiday_exam_list_flow(to_phone_number, language, previous_menu="admission"):
@@ -1148,7 +1157,7 @@ def send_holiday_exam_list_flow(to_phone_number, language, previous_menu="admiss
             }[language],
         )
 
-    send_navigation_buttons(to_phone_number, language, previous_menu)
+    send_navigation_buttons_later(to_phone_number, language, previous_menu, MEDIA_NAVIGATION_DELAY_SECONDS)
 
 
 def fetch_json_url(url, timeout=20):
@@ -2229,7 +2238,7 @@ def send_certificate_flow(to_phone_number, language, student, certificate_id):
                 ),
             }[language],
         )
-        send_navigation_buttons(to_phone_number, language, "certificates")
+        send_navigation_buttons_later(to_phone_number, language, "certificates")
         return
 
     try:
@@ -2251,7 +2260,7 @@ def send_certificate_flow(to_phone_number, language, student, certificate_id):
             f"{certificate['title']['en']}.pdf",
             certificate["title"][language],
         )
-        send_navigation_buttons(to_phone_number, language, "certificates")
+        send_navigation_buttons_later(to_phone_number, language, "certificates", MEDIA_NAVIGATION_DELAY_SECONDS)
     except Exception as exc:
         logger.exception("Failed to generate certificate: %s", exc)
         send_text_message(
@@ -2261,7 +2270,7 @@ def send_certificate_flow(to_phone_number, language, student, certificate_id):
                 "hi": "Certificate PDF अभी generate नहीं हो पाया। कृपया बाद में प्रयास करें या कार्यालय से संपर्क करें।",
             }[language],
         )
-        send_navigation_buttons(to_phone_number, language, "certificates")
+        send_navigation_buttons_later(to_phone_number, language, "certificates")
 
 
 def send_language_buttons(to_phone_number):
@@ -2382,6 +2391,70 @@ def run_later(delay_seconds, callback, *args):
     timer.daemon = True
     timer.start()
     return timer
+
+
+def send_navigation_buttons_later(to_phone_number, language, previous_menu="main", delay_seconds=None):
+    delay = NAVIGATION_DELAY_SECONDS if delay_seconds is None else max(float(delay_seconds), 0.0)
+    return run_later(delay, send_navigation_buttons, to_phone_number, language, previous_menu)
+
+
+def clear_student_auth_timers(to_phone_number):
+    timers = STUDENT_AUTH_TIMERS_BY_USER.pop(to_phone_number, [])
+    for timer in timers:
+        try:
+            timer.cancel()
+        except Exception:
+            pass
+
+
+def send_student_session_expiring_warning(to_phone_number, language):
+    if to_phone_number not in STUDENT_AUTH_BY_USER:
+        return
+
+    send_text_message(
+        to_phone_number,
+        {
+            "en": (
+                "Your verified student session is expiring soon.\n\n"
+                "After it expires, please verify again with admission number and DOB to use Student or Academic Services."
+            ),
+            "hi": (
+                "आपका verified student session जल्द expire होने वाला है।\n\n"
+                "Expire होने के बाद Student या Academic Services के लिए admission number और DOB से फिर verify करें।"
+            ),
+        }[language],
+    )
+
+
+def expire_student_auth_session(to_phone_number, language):
+    if to_phone_number not in STUDENT_AUTH_BY_USER:
+        return
+
+    STUDENT_AUTH_BY_USER.pop(to_phone_number, None)
+    STUDENT_AUTH_TIMERS_BY_USER.pop(to_phone_number, None)
+    send_text_message(
+        to_phone_number,
+        {
+            "en": "Your verified student session has expired. Please verify again to use Student or Academic Services.",
+            "hi": "आपका verified student session expire हो गया है। Student या Academic Services उपयोग करने के लिए फिर verify करें।",
+        }[language],
+    )
+
+
+def schedule_student_auth_expiry(to_phone_number, language):
+    clear_student_auth_timers(to_phone_number)
+    timers = []
+
+    warning_delay = STUDENT_AUTH_TIMEOUT_SECONDS - STUDENT_AUTH_WARNING_SECONDS
+    if warning_delay > 0:
+        timers.append(
+            run_later(warning_delay, send_student_session_expiring_warning, to_phone_number, language)
+        )
+
+    if STUDENT_AUTH_TIMEOUT_SECONDS > 0:
+        timers.append(run_later(STUDENT_AUTH_TIMEOUT_SECONDS, expire_student_auth_session, to_phone_number, language))
+
+    STUDENT_AUTH_TIMERS_BY_USER[to_phone_number] = timers
 
 
 def safe_reply_to_user(to_phone_number, message_text):
@@ -2679,19 +2752,19 @@ def send_admission_enquiry_flow(to_phone_number, language):
     )
     run_later(3, send_text_message, to_phone_number, ADMISSION_REQUIREMENTS_MESSAGE[language])
     run_later(4.5, send_admission_action_buttons, to_phone_number, language)
-    run_later(5.5, send_navigation_buttons, to_phone_number, language, "admission")
+    send_navigation_buttons_later(to_phone_number, language, "admission", 7)
 
 
 def send_fee_structure_flow(to_phone_number, language):
     send_text_message(to_phone_number, FEE_OVERVIEW_MESSAGE[language])
     run_later(1.5, send_text_message, to_phone_number, FEE_STRUCTURE_MESSAGE[language])
-    run_later(2.5, send_navigation_buttons, to_phone_number, language, "admission")
+    send_navigation_buttons_later(to_phone_number, language, "admission", 4)
 
 
 def send_transport_facility_flow(to_phone_number, language):
     send_text_message(to_phone_number, TRANSPORT_OVERVIEW_MESSAGE[language])
     run_later(1.5, send_text_message, to_phone_number, TRANSPORT_FEE_MESSAGE[language])
-    run_later(2.5, send_navigation_buttons, to_phone_number, language, "admission")
+    send_navigation_buttons_later(to_phone_number, language, "admission", 4)
 
 
 def start_student_details_flow(to_phone_number, language):
@@ -3187,7 +3260,7 @@ def send_student_photo_if_available(to_phone_number, student, language):
 def send_student_details_response(to_phone_number, student, language):
     send_student_photo_if_available(to_phone_number, student, language)
     send_text_message(to_phone_number, format_student_details(student, language))
-    send_navigation_buttons(to_phone_number, language, "academic")
+    send_navigation_buttons_later(to_phone_number, language, "academic", MEDIA_NAVIGATION_DELAY_SECONDS)
 
 
 def handle_student_details_session(to_phone_number, message_text):
@@ -3247,7 +3320,9 @@ def process_student_details_login(to_phone_number, username, password, language,
     STUDENT_AUTH_BY_USER[to_phone_number] = {
         "student": result["student"],
         "language": language,
+        "verified_at": datetime.utcnow().isoformat(),
     }
+    schedule_student_auth_expiry(to_phone_number, language)
 
     if after_login in {"show_other_services", "show_academic_services", "show_exam_services"}:
         student_name = first_present(result["student"], ["name", "student_name"])
@@ -3312,6 +3387,7 @@ def send_results_exams_flow(to_phone_number, language, student):
             to_phone_number,
             STUDENT_LOGIN_TEXT[result_data.get("reason", "server_error")][language],
         )
+        send_navigation_buttons_later(to_phone_number, language, "exam")
         return
 
     send_text_message(to_phone_number, result_summary_text(result_data, language))
@@ -3324,7 +3400,7 @@ def send_results_exams_flow(to_phone_number, language, student):
         )
     )
     if not has_successful_result:
-        send_navigation_buttons(to_phone_number, language, "exam")
+        send_navigation_buttons_later(to_phone_number, language, "exam")
         return
 
     try:
@@ -3341,7 +3417,7 @@ def send_results_exams_flow(to_phone_number, language, student):
                 "hi": "Result PDF - पी.एस. पब्लिक स्कूल",
             }[language],
         )
-        send_navigation_buttons(to_phone_number, language, "exam")
+        send_navigation_buttons_later(to_phone_number, language, "exam", MEDIA_NAVIGATION_DELAY_SECONDS)
     except Exception as exc:
         logger.exception("Failed to create/send result PDF: %s", exc)
         send_text_message(
@@ -3351,7 +3427,7 @@ def send_results_exams_flow(to_phone_number, language, student):
                 "hi": "Text result भेज दिया गया है, लेकिन PDF अभी generate नहीं हो पाया।",
             }[language],
         )
-        send_navigation_buttons(to_phone_number, language, "exam")
+        send_navigation_buttons_later(to_phone_number, language, "exam")
 
 
 def set_language_and_start(to_phone_number, language):
@@ -3407,7 +3483,7 @@ def reply_to_user(to_phone_number, message_text):
 
     if service_id in ACTION_REPLIES:
         send_text_message(to_phone_number, ACTION_REPLIES[service_id][language])
-        send_navigation_buttons(to_phone_number, language, "main")
+        send_navigation_buttons_later(to_phone_number, language, "main")
         return
 
     if service_id == "admission_services":
@@ -3539,12 +3615,12 @@ def reply_to_user(to_phone_number, message_text):
             OTHER_SERVICE_CATEGORIES[other_category_id]["reply"][language],
         )
         previous_menu = "exam" if other_category_id in EXAM_CATEGORY_IDS else "academic"
-        send_navigation_buttons(to_phone_number, language, previous_menu)
+        send_navigation_buttons_later(to_phone_number, language, previous_menu)
         return
 
     if service_id in SERVICES:
         send_text_message(to_phone_number, SERVICES[service_id]["reply"][language])
-        send_navigation_buttons(to_phone_number, language, "main")
+        send_navigation_buttons_later(to_phone_number, language, "main")
         return
 
     send_intro_and_services(to_phone_number, language)
