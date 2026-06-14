@@ -38,6 +38,8 @@ EXAM_BACKEND_STUDENT_LOGIN_URL = os.getenv(
 ).strip()
 EXAM_BACKEND_URL = os.getenv("EXAM_BACKEND_URL", DEFAULT_EXAM_BACKEND_URL).strip()
 STUDENT_BACKEND_URL = os.getenv("STUDENT_BACKEND_URL", DEFAULT_STUDENT_BACKEND_URL).strip()
+DEFAULT_LIBRARY_BACKEND_URL = "https://library-backend-117372286918.asia-south1.run.app"
+LIBRARY_BACKEND_URL = os.getenv("LIBRARY_BACKEND_URL", DEFAULT_LIBRARY_BACKEND_URL).strip().rstrip("/")
 FACILITY_IMAGE_FILES = [
     ("Physics Lab", "facilities/physics-lab.jpg"),
     ("Computer Lab", "facilities/computer-lab.jpg"),
@@ -3572,6 +3574,153 @@ def send_student_idcard_pdf_if_possible(to_phone_number, student, language):
         send_navigation_buttons_later(to_phone_number, language, "academic")
 
 
+def fetch_library_records(admission_no):
+    """Fetch library records for a student from the library backend."""
+    try:
+        url = f"{LIBRARY_BACKEND_URL}/api/records/student/{admission_no}"
+        response = requests.get(url, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+        if data.get("success"):
+            return {"ok": True, "records": data.get("records", []), "admission_no": data.get("admission_no")}
+        return {"ok": False, "records": [], "error": data.get("error", "No records found")}
+    except requests.RequestException as exc:
+        logger.error("Library records fetch failed for %s: %s", admission_no, exc)
+        return {"ok": False, "records": [], "error": "library_backend_unavailable"}
+    except ValueError:
+        logger.error("Library backend returned non-JSON for %s", admission_no)
+        return {"ok": False, "records": [], "error": "library_backend_unavailable"}
+
+
+def format_library_records(student, records, language):
+    """Format library records into a readable WhatsApp message."""
+    student_name = first_present(student, ["name", "student_name"])
+    admission_no = first_present(student, ["admission_no", "admissionNo"])
+
+    title = {
+        "en": "Library Records",
+        "hi": "लाइब्रेरी रिकॉर्ड",
+    }[language]
+
+    lines = [
+        title,
+        "",
+        f"Student: {student_name}",
+        f"Admission No.: {admission_no}",
+        "",
+    ]
+
+    if not records:
+        lines.append(
+            {
+                "en": "No library records found.",
+                "hi": "कोई लाइब्रेरी रिकॉर्ड नहीं मिला।",
+            }[language]
+        )
+        return "\n".join(lines)
+
+    total_fine = 0
+    for idx, rec in enumerate(records, start=1):
+        code = str(rec.get("code", "-"))
+        book = str(rec.get("bookName", "-"))
+        status = str(rec.get("status", "")).upper()
+        issue_date = str(rec.get("issueDate", "-"))
+        due_date = str(rec.get("dueDate", "-"))
+        return_date = str(rec.get("returnDate", "-"))
+        fine = int(rec.get("fine", 0) or 0)
+        fine_reason = str(rec.get("fine_reason", ""))
+
+        total_fine += fine
+
+        status_label = {
+            "en": {
+                "ISSUED": "Issued",
+                "RETURNED": "Returned",
+                "LOST": "Lost",
+                "DAMAGED": "Damaged",
+                "MISPLACED": "Misplaced",
+            },
+            "hi": {
+                "ISSUED": "जारी",
+                "RETURNED": "वापस",
+                "LOST": "खोया",
+                "DAMAGED": "क्षतिग्रस्त",
+                "MISPLACED": "गुम",
+            },
+        }[language].get(status, status)
+
+        lines.append(f"{idx}. {book}")
+        lines.append(f"   Code: {code} | Status: {status_label}")
+        if issue_date and issue_date != "-":
+            lines.append(f"   Issued: {issue_date}")
+        if due_date and due_date != "-":
+            lines.append(f"   Due: {due_date}")
+        if return_date and return_date != "-":
+            lines.append(f"   Returned: {return_date}")
+        if fine > 0:
+            reason_text = f" ({fine_reason})" if fine_reason else ""
+            lines.append(f"   Fine: Rs. {fine}{reason_text}")
+        lines.append("")
+
+    if total_fine > 0:
+        lines.append(
+            {
+                "en": f"Total Pending Fine: Rs. {total_fine}",
+                "hi": f"कुल लंबित जुर्माना: Rs. {total_fine}",
+            }[language]
+        )
+        lines.append(
+            {
+                "en": "Please clear pending fines at the school library.",
+                "hi": "कृपया स्कूल लाइब्रेरी में लंबित जुर्माना जमा करें।",
+            }[language]
+        )
+        lines.append("")
+
+    lines.append(
+        {
+            "en": "For book renewal, return, or fine queries, please contact the library.",
+            "hi": "Book renewal, return या fine queries के लिए library से संपर्क करें।",
+        }[language]
+    )
+
+    return "\n".join(lines).strip()
+
+
+def send_library_records_flow(to_phone_number, student, language):
+    """Fetch library records and send them via WhatsApp."""
+    admission_no = first_present(student, ["admission_no", "admissionNo"])
+    if admission_no == "-":
+        send_text_message(
+            to_phone_number,
+            {
+                "en": "Library Records could not be fetched. Student admission number is missing.",
+                "hi": "लाइब्रेरी रिकॉर्ड प्राप्त नहीं हो पाया। Admission number missing है।",
+            }[language],
+        )
+        send_navigation_buttons_later(to_phone_number, language, "academic")
+        return
+
+    try:
+        result = fetch_library_records(admission_no)
+    except Exception as exc:
+        logger.exception("Failed to fetch library records: %s", exc)
+        send_text_message(
+            to_phone_number,
+            {
+                "en": "Library records could not be fetched right now. Please try again later or contact the library.",
+                "hi": "अभी लाइब्रेरी रिकॉर्ड प्राप्त नहीं हो पाया। कृपया बाद में प्रयास करें या library से संपर्क करें।",
+            }[language],
+        )
+        send_navigation_buttons_later(to_phone_number, language, "academic")
+        return
+
+    records = result.get("records", [])
+    message = format_library_records(student, records, language)
+    send_text_message(to_phone_number, message)
+    send_navigation_buttons_later(to_phone_number, language, "academic")
+
+
 def send_results_exams_flow(to_phone_number, language, student):
     try:
         result_data = fetch_student_results(student, language)
@@ -3801,6 +3950,21 @@ def reply_to_user(to_phone_number, message_text):
             return
 
         send_certificate_list_message(to_phone_number, language)
+        return
+
+    if other_category_id == "library_records":
+        auth = STUDENT_AUTH_BY_USER.get(to_phone_number)
+        if not auth or not isinstance(auth.get("student"), dict):
+            start_other_services_login_flow(to_phone_number, language)
+            return
+
+        run_later(
+            0.1,
+            send_library_records_flow,
+            to_phone_number,
+            auth["student"],
+            language,
+        )
         return
 
     if other_category_id == "exam_schedule":
