@@ -407,7 +407,7 @@ OTHER_SERVICE_CATEGORIES = {
         "title": {"en": "Student Details", "hi": "विद्यार्थी विवरण"},
         "description": {
             "en": "Profile, photo and ID card",
-            "hi": "विद्यार्थी/अभिभावक जानकारी",
+            "hi": "प्रोफाइल, फोटो और ID कार्ड",
         },
         "reply": {
             "en": (
@@ -3260,7 +3260,7 @@ def send_student_photo_if_available(to_phone_number, student, language):
 def send_student_details_response(to_phone_number, student, language):
     send_student_photo_if_available(to_phone_number, student, language)
     send_text_message(to_phone_number, format_student_details(student, language))
-    send_navigation_buttons_later(to_phone_number, language, "academic", MEDIA_NAVIGATION_DELAY_SECONDS)
+    send_student_idcard_pdf_if_possible(to_phone_number, student, language)
 
 
 def handle_student_details_session(to_phone_number, message_text):
@@ -3370,8 +3370,206 @@ def process_student_details_login(to_phone_number, username, password, language,
         send_text_message(to_phone_number, STUDENT_LOGIN_TEXT["server_error"][language])
         return
 
-        send_student_photo_if_available(to_phone_number, result["student"], language)
-        send_text_message(to_phone_number, details_message)
+    send_student_photo_if_available(to_phone_number, result["student"], language)
+    send_text_message(to_phone_number, details_message)
+    send_student_idcard_pdf_if_possible(to_phone_number, result["student"], language)
+
+
+def draw_student_idcard_pdf(path, student):
+    """Generate a professional ID-card style PDF with school logo, student photo, and details."""
+    from io import BytesIO
+
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.lib.utils import ImageReader
+    from reportlab.pdfgen import canvas
+
+    width, height = A4
+    pdf = canvas.Canvas(path, pagesize=A4)
+    navy = colors.HexColor("#0b2f5b")
+    light_bg = colors.HexColor("#f4f7fb")
+
+    def clean(value, fallback="-"):
+        text = str(value or "").strip()
+        return fallback if not text or text.lower() in {"nan", "none", "null"} else text
+
+    name = clean(first_present(student, ["name", "student_name"]))
+    admission_no = clean(first_present(student, ["admission_no", "admissionNo"]))
+    class_name = clean(first_present(student, ["class_name", "class"]))
+    section = clean(first_present(student, ["section"]), "")
+    class_label = f"{class_name}{' - ' + section if section else ''}"
+    roll = clean(first_present(student, ["roll", "rollno", "roll_no"]), "")
+    father = clean(first_present(student, ["father_name", "fatherName"]))
+    mother = clean(first_present(student, ["mother_name", "motherName"]), "")
+    dob = clean(first_present(student, ["dob", "date_of_birth", "dateOfBirth"]), "")
+    mobile = clean(first_present(student, ["mobile", "phone", "contact", "parent_mobile", "parentMobile"]), "")
+    address = clean(first_present(student, ["address", "student_address", "studentAddress"]), "")
+    session = clean(first_present(student, ["session"]), "")
+
+    # Card dimensions (credit-card-like: 85mm x 54mm, centered on A4)
+    card_w = 85 * mm
+    card_h = 54 * mm
+    card_x = (width - card_w) / 2
+    card_y = (height - card_h) / 2
+
+    # Card background
+    pdf.setFillColor(colors.white)
+    pdf.setStrokeColor(navy)
+    pdf.setLineWidth(1.2)
+    pdf.roundRect(card_x, card_y, card_w, card_h, 3 * mm, stroke=1, fill=1)
+
+    # Top navy header bar
+    header_h = 12 * mm
+    pdf.setFillColor(navy)
+    pdf.setStrokeColor(navy)
+    pdf.rect(card_x, card_y + card_h - header_h, card_w, header_h, stroke=0, fill=1)
+
+    # School name in header
+    pdf.setFillColor(colors.white)
+    pdf.setFont("Helvetica-Bold", 8.5)
+    pdf.drawCentredString(card_x + card_w / 2, card_y + card_h - 5.5 * mm, "P.S. PUBLIC SCHOOL")
+    pdf.setFont("Helvetica", 5.5)
+    pdf.drawCentredString(card_x + card_w / 2, card_y + card_h - 10 * mm, "Ganaur Road Bhurri, Sonipat - 131101")
+
+    # ID Card title below header
+    pdf.setFillColor(navy)
+    pdf.setFont("Helvetica-Bold", 8)
+    pdf.drawCentredString(card_x + card_w / 2, card_y + card_h - header_h - 5 * mm, "STUDENT IDENTITY CARD")
+
+    # Separator line
+    pdf.setStrokeColor(navy)
+    pdf.setLineWidth(0.4)
+    pdf.line(card_x + 4 * mm, card_y + card_h - header_h - 7.5 * mm,
+             card_x + card_w - 4 * mm, card_y + card_h - header_h - 7.5 * mm)
+
+    # Photo area (right side, passport size ~ 22mm x 28mm)
+    photo_x = card_x + card_w - 26 * mm
+    photo_y = card_y + 6 * mm
+    photo_w = 22 * mm
+    photo_h = 28 * mm
+
+    pdf.setStrokeColor(navy)
+    pdf.setLineWidth(0.5)
+    pdf.rect(photo_x, photo_y, photo_w, photo_h)
+
+    photo_url = get_student_photo_url(student)
+    if photo_url:
+        try:
+            response = requests.get(photo_url, timeout=10)
+            response.raise_for_status()
+            image_data = ImageReader(BytesIO(response.content))
+            pdf.drawImage(image_data, photo_x + 1 * mm, photo_y + 1 * mm,
+                          photo_w - 2 * mm, photo_h - 2 * mm,
+                          preserveAspectRatio=True, anchor="c")
+        except Exception as exc:
+            logger.warning("Unable to draw student photo in ID card PDF: %s", exc)
+            pdf.setFont("Helvetica", 5)
+            pdf.drawCentredString(photo_x + photo_w / 2, photo_y + photo_h / 2, "PHOTO")
+
+    # School logo (small, top-left area)
+    if os.path.exists(SCHOOL_LOGO_PATH):
+        try:
+            pdf.drawImage(SCHOOL_LOGO_PATH,
+                          card_x + 3 * mm, card_y + card_h - header_h - 15 * mm,
+                          9 * mm, 9 * mm, preserveAspectRatio=True, mask="auto")
+        except Exception:
+            pass
+
+    # Student details (left side)
+    detail_x = card_x + 4 * mm
+    detail_y = card_y + card_h - header_h - 16 * mm
+    line_h = 4.2 * mm
+
+    pdf.setFillColor(colors.black)
+    details = [
+        ("Name", name),
+        ("Adm. No.", admission_no),
+        ("Class", class_label),
+        ("Roll No.", roll),
+        ("DOB", dob),
+        ("Father", father),
+        ("Mobile", mobile),
+    ]
+
+    for label, value in details:
+        pdf.setFont("Helvetica-Bold", 5.2)
+        pdf.drawString(detail_x, detail_y, f"{label}:")
+        pdf.setFont("Helvetica", 5.5)
+        # Truncate long values
+        display = str(value)[:28]
+        pdf.drawString(detail_x + 14 * mm, detail_y, display)
+        detail_y -= line_h
+
+    # Bottom bar with validity and authorized signature
+    pdf.setFillColor(navy)
+    pdf.setStrokeColor(navy)
+    pdf.rect(card_x, card_y, card_w, 7 * mm, stroke=0, fill=1)
+
+    pdf.setFillColor(colors.white)
+    pdf.setFont("Helvetica", 4.5)
+    pdf.drawString(card_x + 3 * mm, card_y + 2.5 * mm, f"Session: {session}")
+    pdf.drawString(card_x + 30 * mm, card_y + 2.5 * mm, "Valid up to: March 2027")
+    pdf.setFont("Helvetica-Bold", 4.8)
+    pdf.drawRightString(card_x + card_w - 3 * mm, card_y + 2.5 * mm, "Principal")
+
+    # Footer note
+    pdf.setFillColor(colors.HexColor("#555555"))
+    pdf.setFont("Helvetica", 4.2)
+    pdf.drawCentredString(card_x + card_w / 2, card_y + card_h + 4 * mm,
+                          "If found, please return to P.S. Public School. This is a digitally generated card.")
+
+    pdf.showPage()
+    pdf.save()
+
+
+def create_student_idcard_pdf(student):
+    """Save the ID card PDF to RESULTS_DIR and return the filename."""
+    admission_no = clean_certificate_value(
+        first_present(student, ["admission_no", "admissionNo"]), "student"
+    )
+    safe_admission = re.sub(r"[^A-Za-z0-9_-]", "_", admission_no)
+    filename = f"idcard_{safe_admission}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.pdf"
+    path = os.path.join(RESULTS_DIR, filename)
+    draw_student_idcard_pdf(path, student)
+    return filename
+
+
+def send_student_idcard_pdf_if_possible(to_phone_number, student, language):
+    """Generate and send the student ID card PDF via WhatsApp, fall back gracefully."""
+    try:
+        filename = create_student_idcard_pdf(student)
+        pdf_url = build_public_static_url(f"results/{filename}")
+        if not pdf_url:
+            raise RuntimeError("Unable to build public ID card PDF URL.")
+
+        send_text_message(
+            to_phone_number,
+            {
+                "en": "Student ID Card has been generated. Sending PDF now.",
+                "hi": "Student ID Card generate हो गया है। PDF भेजा जा रहा है।",
+            }[language],
+        )
+        send_document_message(
+            to_phone_number,
+            pdf_url,
+            "P.S. Public School Student ID Card.pdf",
+            {
+                "en": "Student ID Card - P.S. Public School",
+                "hi": "Student ID Card - पी.एस. पब्लिक स्कूल",
+            }[language],
+        )
+        send_navigation_buttons_later(to_phone_number, language, "academic", MEDIA_NAVIGATION_DELAY_SECONDS)
+    except Exception as exc:
+        logger.exception("Failed to generate/send student ID card PDF: %s", exc)
+        send_text_message(
+            to_phone_number,
+            {
+                "en": "Student ID Card PDF could not be generated. Please contact the school office for a physical ID card.",
+                "hi": "Student ID Card PDF generate नहीं हो पाया। Physical ID card के लिए कृपया school office से संपर्क करें।",
+            }[language],
+        )
+        send_navigation_buttons_later(to_phone_number, language, "academic")
 
 
 def send_results_exams_flow(to_phone_number, language, student):
