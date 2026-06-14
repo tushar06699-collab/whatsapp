@@ -34,6 +34,18 @@ EXAM_BACKEND_STUDENT_LOGIN_URL = os.getenv(
 ).strip()
 EXAM_BACKEND_URL = os.getenv("EXAM_BACKEND_URL", DEFAULT_EXAM_BACKEND_URL).strip()
 STUDENT_BACKEND_URL = os.getenv("STUDENT_BACKEND_URL", DEFAULT_STUDENT_BACKEND_URL).strip()
+FACILITY_IMAGE_FILES = [
+    ("Physics Lab", "facilities/physics-lab.jpg"),
+    ("Computer Lab", "facilities/computer-lab.jpg"),
+    ("Chemistry Lab", "facilities/chemistry-lab.jpg"),
+    ("Transport", "facilities/transport.jpg"),
+    ("Library", "facilities/library.jpg"),
+    ("Biology Lab", "facilities/biology-lab.jpg"),
+    ("Composite Lab", "facilities/composite-lab.jpg"),
+    ("Sports", "facilities/sports.jpg"),
+]
+PROSPECTUS_PDF_FILE = "PROSPECTUS.pdf"
+HOLIDAY_EXAM_LIST_PDF_FILE = "holiday-list-2026-27.pdf"
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
 
 app = Flask(__name__)
@@ -147,8 +159,8 @@ SERVICES = {
         "reply": {
             "en": (
                 "School Timings\n\n"
-                "For current school timing, office hours, holiday updates, or special schedule changes, "
-                "please contact the school office before visiting.\n\n"
+                "Monday to Saturday: 8:30 AM to 2:30 PM\n\n"
+                "For holiday updates or special schedule changes, please contact the school office before visiting.\n\n"
                 "Call: +91 94162 93661\nWhatsApp: +91 94168 38604"
             ),
             "hi": (
@@ -161,31 +173,39 @@ SERVICES = {
     },
     "holiday_list": {
         "title": {"en": "Holiday List", "hi": "छुट्टी सूची"},
-        "description": {"en": "School holidays and notices", "hi": "स्कूल छुट्टियां और सूचना"},
+        "description": {"en": "Holiday and exam list", "hi": "छुट्टी और परीक्षा सूची"},
         "reply": {
-            "en": "Holiday List\n\nPlease contact the school office for the latest holiday list and official notices.",
-            "hi": "छुट्टी सूची\n\nनई छुट्टी सूची और official notices के लिए कृपया स्कूल कार्यालय से संपर्क करें।",
+            "en": "Holiday & Exam List 2026-27\n\nThe holiday and exam list PDF will be sent in the next message.",
+            "hi": "Holiday & Exam List 2026-27\n\nHoliday और exam list PDF अगले message में भेजा जाएगा।",
         },
     },
     "school_facilities": {
         "title": {"en": "School Facilities", "hi": "स्कूल सुविधाएं"},
-        "description": {"en": "Campus, safety, activities", "hi": "कैंपस, सुरक्षा, गतिविधियां"},
+        "description": {"en": "Labs, library, sports, transport", "hi": "लैब, लाइब्रेरी, खेल, परिवहन"},
         "reply": {
             "en": (
                 "School Facilities\n\n"
-                "- Safe and disciplined campus\n"
-                "- Activity-based learning support\n"
-                "- Transport on selected routes\n"
-                "- Parent communication and student support\n"
-                "- Focus on academics, values, and confidence building"
+                "P.S. Public School provides a strong learning environment with practical labs, reading resources, safe transport, and sports activities.\n\n"
+                "- Physics Lab: hands-on experiments for concepts like mechanics, optics, electricity, and measurement.\n"
+                "- Chemistry Lab: supervised practical work with lab apparatus, chemicals, and safety practices.\n"
+                "- Biology Lab: models, charts, microscopes, and practical observation for life-science learning.\n"
+                "- Computer Lab: computer-based learning, digital practice, typing, projects, and basic IT skills.\n"
+                "- Composite Lab: integrated science activities for observation, experimentation, and project work.\n"
+                "- Library: reading space with books, reference material, newspapers, and study support.\n"
+                "- Transport: school bus facility on selected routes with regular coordination.\n"
+                "- Sports: outdoor activities, physical fitness, discipline, teamwork, and confidence building."
             ),
             "hi": (
                 "स्कूल सुविधाएं\n\n"
-                "- सुरक्षित और अनुशासित campus\n"
-                "- Activity-based learning support\n"
-                "- चयनित routes पर transport\n"
-                "- Parent communication और student support\n"
-                "- पढ़ाई, संस्कार और confidence building पर ध्यान"
+                "P.S. Public School में practical learning, reading support, safe transport और sports activities की सुविधाएं उपलब्ध हैं।\n\n"
+                "- Physics Lab: experiments और practical learning\n"
+                "- Chemistry Lab: supervised practical work और safety practice\n"
+                "- Biology Lab: models, charts, microscope और observation work\n"
+                "- Computer Lab: digital learning, typing, projects और IT skills\n"
+                "- Composite Lab: integrated science activities और project work\n"
+                "- Library: books, reference material और study support\n"
+                "- Transport: selected routes पर school bus facility\n"
+                "- Sports: fitness, discipline, teamwork और confidence building"
             ),
         },
     },
@@ -195,14 +215,16 @@ SERVICES = {
         "reply": {
             "en": (
                 "Prospectus\n\n"
-                "For the latest school prospectus, admission details, facilities, and fee guidance, "
-                "please contact the admission office.\n\n"
+                "School Time: Monday to Saturday, 8:30 AM to 2:30 PM\n\n"
+                "The school prospectus includes admission information, facilities, rules, and general guidance. "
+                "The PDF will be sent in the next message.\n\n"
                 "Call: +91 94162 93661\nWebsite: pspublicschool.com"
             ),
             "hi": (
                 "प्रॉस्पेक्टस\n\n"
-                "Latest school prospectus, admission details, facilities और fee guidance के लिए "
-                "कृपया admission office से संपर्क करें।\n\n"
+                "School Time: Monday to Saturday, 8:30 AM to 2:30 PM\n\n"
+                "Prospectus PDF में admission information, facilities, rules और general guidance दी गई है। "
+                "PDF अगले message में भेजा जाएगा।\n\n"
                 "फोन: +91 94162 93661\nWebsite: pspublicschool.com"
             ),
         },
@@ -319,8 +341,8 @@ OTHER_SERVICE_CATEGORIES = {
         "title": {"en": "Exam Schedule", "hi": "परीक्षा समय-सारणी"},
         "description": {"en": "Datesheet and exam timing", "hi": "Datesheet और exam timing"},
         "reply": {
-            "en": "Exam Schedule\n\nFor the latest exam schedule/datesheet, please contact the school office or class teacher.",
-            "hi": "परीक्षा समय-सारणी\n\nLatest exam schedule/datesheet के लिए school office या class teacher से संपर्क करें।",
+            "en": "Exam Schedule\n\nThe exam schedule PDF will be sent in the next message.",
+            "hi": "परीक्षा समय-सारणी\n\nExam schedule PDF अगले message में भेजा जाएगा।",
         },
     },
     "syllabus": {
@@ -1028,6 +1050,105 @@ def build_public_static_url(filename):
 
     logger.warning("PUBLIC_BASE_URL is not set; cannot build public URL outside request context.")
     return ""
+
+
+def static_file_exists(filename):
+    return os.path.isfile(os.path.join(app.static_folder, filename.replace("/", os.sep)))
+
+
+def send_school_facilities_flow(to_phone_number, language):
+    send_text_message(to_phone_number, SERVICES["school_facilities"]["reply"][language])
+
+    sent_any_image = False
+    for title, filename in FACILITY_IMAGE_FILES:
+        if not static_file_exists(filename):
+            continue
+
+        image_url = build_public_static_url(filename)
+        if not image_url:
+            continue
+
+        caption = {
+            "en": f"P.S. Public School - {title}",
+            "hi": f"P.S. Public School - {title}",
+        }[language]
+        if send_image_message(to_phone_number, image_url, caption):
+            sent_any_image = True
+
+    if not sent_any_image:
+        logger.info("No facility images found in static/facilities to send.")
+
+    send_navigation_buttons(to_phone_number, language, "admission")
+
+
+def send_prospectus_flow(to_phone_number, language):
+    send_text_message(to_phone_number, SERVICES["prospectus"]["reply"][language])
+
+    if static_file_exists(PROSPECTUS_PDF_FILE):
+        prospectus_url = build_public_static_url(PROSPECTUS_PDF_FILE)
+        if prospectus_url:
+            send_document_message(
+                to_phone_number,
+                prospectus_url,
+                "P.S. Public School Prospectus.pdf",
+                {
+                    "en": "P.S. Public School Prospectus",
+                    "hi": "P.S. Public School Prospectus",
+                }[language],
+            )
+        else:
+            send_text_message(
+                to_phone_number,
+                {
+                    "en": "Prospectus PDF is available, but the public URL is not configured.",
+                    "hi": "Prospectus PDF available है, लेकिन public URL configured नहीं है।",
+                }[language],
+            )
+    else:
+        send_text_message(
+            to_phone_number,
+            {
+                "en": "Prospectus PDF is not available right now. Please contact the school office.",
+                "hi": "Prospectus PDF अभी उपलब्ध नहीं है। कृपया school office से संपर्क करें।",
+            }[language],
+        )
+
+    send_navigation_buttons(to_phone_number, language, "admission")
+
+
+def send_holiday_exam_list_flow(to_phone_number, language, previous_menu="admission"):
+    send_text_message(to_phone_number, SERVICES["holiday_list"]["reply"][language])
+
+    if static_file_exists(HOLIDAY_EXAM_LIST_PDF_FILE):
+        pdf_url = build_public_static_url(HOLIDAY_EXAM_LIST_PDF_FILE)
+        if pdf_url:
+            send_document_message(
+                to_phone_number,
+                pdf_url,
+                "P.S. Public School Holiday & Exam List 2026-27.pdf",
+                {
+                    "en": "Holiday & Exam List 2026-27",
+                    "hi": "Holiday & Exam List 2026-27",
+                }[language],
+            )
+        else:
+            send_text_message(
+                to_phone_number,
+                {
+                    "en": "Holiday and exam list PDF is available, but the public URL is not configured.",
+                    "hi": "Holiday और exam list PDF available है, लेकिन public URL configured नहीं है।",
+                }[language],
+            )
+    else:
+        send_text_message(
+            to_phone_number,
+            {
+                "en": "Holiday and exam list PDF is not available right now. Please contact the school office.",
+                "hi": "Holiday और exam list PDF अभी उपलब्ध नहीं है। कृपया school office से संपर्क करें।",
+            }[language],
+        )
+
+    send_navigation_buttons(to_phone_number, language, previous_menu)
 
 
 def fetch_json_url(url, timeout=20):
@@ -3321,6 +3442,18 @@ def reply_to_user(to_phone_number, message_text):
         send_transport_facility_flow(to_phone_number, language)
         return
 
+    if service_id == "holiday_list":
+        send_holiday_exam_list_flow(to_phone_number, language, "admission")
+        return
+
+    if service_id == "school_facilities":
+        send_school_facilities_flow(to_phone_number, language)
+        return
+
+    if service_id == "prospectus":
+        send_prospectus_flow(to_phone_number, language)
+        return
+
     if service_id == "change_language":
         send_language_buttons(to_phone_number)
         return
@@ -3394,6 +3527,10 @@ def reply_to_user(to_phone_number, message_text):
             return
 
         send_certificate_list_message(to_phone_number, language)
+        return
+
+    if other_category_id == "exam_schedule":
+        send_holiday_exam_list_flow(to_phone_number, language, "exam")
         return
 
     if other_category_id in OTHER_SERVICE_CATEGORIES:
