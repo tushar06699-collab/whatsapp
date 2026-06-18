@@ -2600,20 +2600,24 @@ def expire_student_auth_session(to_phone_number, language):
 
     STUDENT_AUTH_BY_USER.pop(to_phone_number, None)
     STUDENT_AUTH_TIMERS_BY_USER.pop(to_phone_number, None)
+    send_session_timed_out_message(to_phone_number, language)
+
+
+def send_session_timed_out_message(to_phone_number, language):
     send_text_message(
         to_phone_number,
         {
             "en": (
-                "Your verified student session has ended.\n\n"
-                "Please verify again with admission number and DOB to use Student or Academic Services.\n\n"
+                "Your session has timed out due to inactivity on the channel.\n\n"
+                "Please type 'Hi' to go to P.S. Public School Welcome Message.\n\n"
                 "Thank you for using P.S. Public School WhatsApp services.\n\n"
                 "Regards,\n"
                 "IT Department\n"
                 "P.S. Public School"
             ),
             "hi": (
-                "आपका verified student session समाप्त हो गया है।\n\n"
-                "Student या Academic Services उपयोग करने के लिए admission number और DOB से फिर verify करें।\n\n"
+                "आपका session inactivity के कारण timed out हो गया है।\n\n"
+                "P.S. Public School Welcome Message पर जाने के लिए कृपया 'Hi' type करें।\n\n"
                 "P.S. Public School WhatsApp services उपयोग करने के लिए धन्यवाद।\n\n"
                 "Regards,\n"
                 "IT Department\n"
@@ -2653,6 +2657,36 @@ def refresh_student_auth_session(to_phone_number, language):
     auth["last_activity_at"] = datetime.utcnow().isoformat()
     auth["language"] = language
     schedule_student_auth_expiry(to_phone_number, language)
+
+
+def is_student_auth_session_expired(to_phone_number):
+    if STUDENT_AUTH_TIMEOUT_SECONDS <= 0:
+        return False
+
+    auth = STUDENT_AUTH_BY_USER.get(to_phone_number)
+    if not auth:
+        return False
+
+    raw_time = auth.get("last_activity_at") or auth.get("verified_at")
+    if not raw_time:
+        return False
+
+    try:
+        last_activity = datetime.fromisoformat(raw_time)
+    except Exception:
+        return False
+
+    return (datetime.utcnow() - last_activity).total_seconds() >= STUDENT_AUTH_TIMEOUT_SECONDS
+
+
+def handle_expired_student_auth_session(to_phone_number, language):
+    if not is_student_auth_session_expired(to_phone_number):
+        return False
+
+    STUDENT_AUTH_BY_USER.pop(to_phone_number, None)
+    clear_student_auth_timers(to_phone_number)
+    send_session_timed_out_message(to_phone_number, language)
+    return True
 
 
 def safe_reply_to_user(to_phone_number, message_text):
