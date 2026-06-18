@@ -20,7 +20,7 @@ SCHOOL_IMAGE_URL = os.getenv("SCHOOL_IMAGE_URL", "").strip()
 SERVICE_MENU_DELAY_SECONDS = float(os.getenv("SERVICE_MENU_DELAY_SECONDS", "3"))
 NAVIGATION_DELAY_SECONDS = float(os.getenv("NAVIGATION_DELAY_SECONDS", "2"))
 MEDIA_NAVIGATION_DELAY_SECONDS = float(os.getenv("MEDIA_NAVIGATION_DELAY_SECONDS", "4"))
-STUDENT_AUTH_TIMEOUT_SECONDS = int(os.getenv("STUDENT_AUTH_TIMEOUT_SECONDS", "86400"))
+STUDENT_AUTH_TIMEOUT_SECONDS = int(os.getenv("STUDENT_AUTH_TIMEOUT_SECONDS", "1800"))
 STUDENT_AUTH_WARNING_SECONDS = int(os.getenv("STUDENT_AUTH_WARNING_SECONDS", "300"))
 ADMISSION_FORM_PDF_URL = os.getenv("ADMISSION_FORM_PDF_URL", "").strip()
 ONLINE_ADMISSION_FORM_URL = os.getenv(
@@ -2418,11 +2418,19 @@ def send_student_session_expiring_warning(to_phone_number, language):
         {
             "en": (
                 "Your verified student session is expiring soon.\n\n"
-                "After it expires, please verify again with admission number and DOB to use Student or Academic Services."
+                "After it expires, please verify again with admission number and DOB to use Student or Academic Services.\n\n"
+                "Thank you for using P.S. Public School WhatsApp services.\n\n"
+                "Regards,\n"
+                "IT Department\n"
+                "P.S. Public School"
             ),
             "hi": (
                 "आपका verified student session जल्द expire होने वाला है।\n\n"
-                "Expire होने के बाद Student या Academic Services के लिए admission number और DOB से फिर verify करें।"
+                "Expire होने के बाद Student या Academic Services के लिए admission number और DOB से फिर verify करें।\n\n"
+                "P.S. Public School WhatsApp services उपयोग करने के लिए धन्यवाद।\n\n"
+                "Regards,\n"
+                "IT Department\n"
+                "P.S. Public School"
             ),
         }[language],
     )
@@ -2437,8 +2445,22 @@ def expire_student_auth_session(to_phone_number, language):
     send_text_message(
         to_phone_number,
         {
-            "en": "Your verified student session has expired. Please verify again to use Student or Academic Services.",
-            "hi": "आपका verified student session expire हो गया है। Student या Academic Services उपयोग करने के लिए फिर verify करें।",
+            "en": (
+                "Your verified student session has ended.\n\n"
+                "Please verify again with admission number and DOB to use Student or Academic Services.\n\n"
+                "Thank you for using P.S. Public School WhatsApp services.\n\n"
+                "Regards,\n"
+                "IT Department\n"
+                "P.S. Public School"
+            ),
+            "hi": (
+                "आपका verified student session समाप्त हो गया है।\n\n"
+                "Student या Academic Services उपयोग करने के लिए admission number और DOB से फिर verify करें।\n\n"
+                "P.S. Public School WhatsApp services उपयोग करने के लिए धन्यवाद।\n\n"
+                "Regards,\n"
+                "IT Department\n"
+                "P.S. Public School"
+            ),
         }[language],
     )
 
@@ -2447,16 +2469,32 @@ def schedule_student_auth_expiry(to_phone_number, language):
     clear_student_auth_timers(to_phone_number)
     timers = []
 
+    if STUDENT_AUTH_TIMEOUT_SECONDS <= 0:
+        STUDENT_AUTH_TIMERS_BY_USER[to_phone_number] = timers
+        return
+
     warning_delay = STUDENT_AUTH_TIMEOUT_SECONDS - STUDENT_AUTH_WARNING_SECONDS
-    if warning_delay > 0:
+    if warning_delay <= 0 and STUDENT_AUTH_TIMEOUT_SECONDS > 30:
+        warning_delay = max(STUDENT_AUTH_TIMEOUT_SECONDS - 30, 1)
+
+    if 0 < warning_delay < STUDENT_AUTH_TIMEOUT_SECONDS:
         timers.append(
             run_later(warning_delay, send_student_session_expiring_warning, to_phone_number, language)
         )
 
-    if STUDENT_AUTH_TIMEOUT_SECONDS > 0:
-        timers.append(run_later(STUDENT_AUTH_TIMEOUT_SECONDS, expire_student_auth_session, to_phone_number, language))
+    timers.append(run_later(STUDENT_AUTH_TIMEOUT_SECONDS, expire_student_auth_session, to_phone_number, language))
 
     STUDENT_AUTH_TIMERS_BY_USER[to_phone_number] = timers
+
+
+def refresh_student_auth_session(to_phone_number, language):
+    auth = STUDENT_AUTH_BY_USER.get(to_phone_number)
+    if not auth:
+        return
+
+    auth["last_activity_at"] = datetime.utcnow().isoformat()
+    auth["language"] = language
+    schedule_student_auth_expiry(to_phone_number, language)
 
 
 def safe_reply_to_user(to_phone_number, message_text):
@@ -3323,6 +3361,7 @@ def process_student_details_login(to_phone_number, username, password, language,
         "student": result["student"],
         "language": language,
         "verified_at": datetime.utcnow().isoformat(),
+        "last_activity_at": datetime.utcnow().isoformat(),
     }
     schedule_student_auth_expiry(to_phone_number, language)
 
@@ -3825,6 +3864,8 @@ def reply_to_user(to_phone_number, message_text):
     if not language:
         send_language_buttons(to_phone_number)
         return
+
+    refresh_student_auth_session(to_phone_number, language)
 
     service_id = service_title_to_id(language).get(normalized_text, normalized_text)
 
