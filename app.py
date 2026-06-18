@@ -2207,6 +2207,159 @@ def create_certificate_pdf(student, certificate_type):
     return filename
 
 
+def check_certificate_permission(student, certificate_type):
+    exam_backend_url = (EXAM_BACKEND_URL or DEFAULT_EXAM_BACKEND_URL).rstrip("/")
+    params = {
+        "session": first_present(student, ["session"]),
+        "class_name": first_present(student, ["class_name", "class"]),
+        "admission_no": first_present(student, ["admission_no", "admissionNo"]),
+        "student_id": first_present(student, ["student_id", "id", "_id"]),
+        "certificate_type": certificate_type,
+    }
+    params = {key: value for key, value in params.items() if value and value != "-"}
+    try:
+        response = requests.get(
+            f"{exam_backend_url}/certificate-access/check",
+            params=params,
+            timeout=15,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except Exception as exc:
+        logger.warning("Unable to check certificate permission: %s", exc)
+        return {"ok": False, "allowed": False, "reason": "server_error"}
+
+    return {
+        "ok": bool(data.get("success", True)),
+        "allowed": bool(data.get("allowed")),
+        "reason": data.get("reason") or "permission_required",
+    }
+
+
+def create_certificate_permission_application_pdf(student, certificate_title, certificate_type):
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.pdfgen import canvas
+
+    admission_no = clean_certificate_value(first_present(student, ["admission_no", "admissionNo"]), "student")
+    safe_admission = re.sub(r"[^A-Za-z0-9_-]", "_", admission_no)
+    safe_type = re.sub(r"[^A-Za-z0-9_-]", "_", certificate_type)
+    filename = f"certificate_permission_application_{safe_type}_{safe_admission}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.pdf"
+    path = os.path.join(RESULTS_DIR, filename)
+
+    width, height = A4
+    pdf = canvas.Canvas(path, pagesize=A4)
+    pdf.setStrokeColor(colors.HexColor("#0b2f5b"))
+    pdf.setLineWidth(1.4)
+    pdf.rect(14 * mm, 14 * mm, width - 28 * mm, height - 28 * mm)
+
+    if os.path.exists(SCHOOL_LOGO_PATH):
+        pdf.drawImage(SCHOOL_LOGO_PATH, 22 * mm, height - 42 * mm, 24 * mm, 24 * mm, preserveAspectRatio=True, mask="auto")
+
+    pdf.setFillColor(colors.HexColor("#0b2f5b"))
+    pdf.setFont("Helvetica-Bold", 22)
+    pdf.drawCentredString(width / 2, height - 24 * mm, "P.S. PUBLIC SCHOOL")
+    pdf.setFont("Helvetica", 10)
+    pdf.drawCentredString(width / 2, height - 31 * mm, "Ganaur Road Bhurri (Sonipat) - 131101")
+    pdf.drawCentredString(width / 2, height - 37 * mm, "Phone: +91 94162 93661 | Email: psbhurri@gmail.com")
+    pdf.line(22 * mm, height - 47 * mm, width - 22 * mm, height - 47 * mm)
+
+    pdf.setFont("Helvetica-Bold", 15)
+    pdf.drawCentredString(width / 2, height - 60 * mm, "CERTIFICATE ISSUE PERMISSION APPLICATION")
+
+    y = height - 78 * mm
+    pdf.setFillColor(colors.black)
+    pdf.setFont("Helvetica", 10)
+    today = datetime.utcnow().strftime("%d/%m/%Y")
+    details = [
+        ("Date", today),
+        ("Requested Certificate", certificate_title),
+        ("Student Name", first_present(student, ["name", "student_name"])),
+        ("Admission No.", admission_no),
+        ("Class", f"{first_present(student, ['class_name', 'class'])} {first_present(student, ['section'])}".replace(" -", "").strip()),
+        ("Father Name", first_present(student, ["father_name", "fatherName", "father"])),
+        ("Mother Name", first_present(student, ["mother_name", "motherName", "mother"])),
+        ("Session", first_present(student, ["session"])),
+    ]
+    for label, value in details:
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawString(26 * mm, y, f"{label}:")
+        pdf.setFont("Helvetica", 10)
+        pdf.drawString(68 * mm, y, clean_certificate_value(value))
+        y -= 8 * mm
+
+    y -= 8 * mm
+    body_lines = [
+        "To",
+        "The Principal / School Office",
+        "P.S. Public School",
+        "",
+        f"Subject: Request for permission to issue {certificate_title}",
+        "",
+        "Respected Sir/Madam,",
+        "",
+        "I request the school office to kindly verify my record and grant permission",
+        f"for issuing the above certificate through the school WhatsApp service.",
+        "I understand that certificate issue is subject to office verification, fee/dues",
+        "clearance, and school approval.",
+        "",
+        "Thank you.",
+    ]
+    pdf.setFont("Helvetica", 10)
+    for line in body_lines:
+        pdf.drawString(26 * mm, y, line)
+        y -= 7 * mm
+
+    y -= 10 * mm
+    pdf.line(26 * mm, y, 78 * mm, y)
+    pdf.line(width - 78 * mm, y, width - 26 * mm, y)
+    pdf.setFont("Helvetica", 9)
+    pdf.drawString(26 * mm, y - 6 * mm, "Parent / Guardian Signature")
+    pdf.drawString(width - 78 * mm, y - 6 * mm, "Office Approval")
+
+    pdf.setFont("Helvetica-Oblique", 8)
+    pdf.setFillColor(colors.HexColor("#555555"))
+    pdf.drawCentredString(width / 2, 24 * mm, "This application is generated for school office permission and verification.")
+    pdf.showPage()
+    pdf.save()
+    return filename
+
+
+def send_certificate_permission_denied_flow(to_phone_number, language, student, certificate):
+    certificate_type = certificate["certificate_type"]
+    certificate_title = certificate["title"]["en"]
+    send_text_message(
+        to_phone_number,
+        {
+            "en": (
+                f"{certificate['title'][language]} cannot be issued on WhatsApp right now.\n\n"
+                "Permission is not approved for this student/certificate. Please contact the school office and submit the permission application.\n\n"
+                "The application PDF will be sent in the next message."
+            ),
+            "hi": (
+                f"{certificate['title'][language]} अभी WhatsApp पर issue नहीं हो सकता।\n\n"
+                "इस student/certificate के लिए permission approved नहीं है। कृपया school office से संपर्क करें और permission application जमा करें।\n\n"
+                "Application PDF अगले message में भेजा जाएगा।"
+            ),
+        }[language],
+    )
+    try:
+        filename = create_certificate_permission_application_pdf(student, certificate_title, certificate_type)
+        pdf_url = build_public_static_url(f"results/{filename}")
+        if pdf_url:
+            send_document_message(
+                to_phone_number,
+                pdf_url,
+                f"{certificate_title} Permission Application.pdf",
+                "Certificate Permission Application",
+            )
+    except Exception as exc:
+        logger.exception("Failed to generate certificate permission application PDF: %s", exc)
+
+    send_navigation_buttons_later(to_phone_number, language, "certificates", MEDIA_NAVIGATION_DELAY_SECONDS)
+
+
 def send_certificate_flow(to_phone_number, language, student, certificate_id):
     certificate = CERTIFICATE_CATEGORIES.get(certificate_id)
     if not certificate:
@@ -2220,6 +2373,11 @@ def send_certificate_flow(to_phone_number, language, student, certificate_id):
         return
 
     certificate_type = certificate["certificate_type"]
+    permission = check_certificate_permission(student, certificate_type)
+    if not permission.get("allowed"):
+        send_certificate_permission_denied_flow(to_phone_number, language, student, certificate)
+        return
+
     if certificate_type == "tc":
         send_text_message(
             to_phone_number,
